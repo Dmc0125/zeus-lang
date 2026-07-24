@@ -8,9 +8,88 @@ import "core:mem/virtual"
 import "core:strconv"
 import "core:unicode/utf8"
 
+Error_Invalid_Token :: struct {
+	token: string,
+	line:  int,
+	col:   int,
+}
+
+error_invalid_token_string :: proc(e: Error_Invalid_Token, allocator: mem.Allocator) -> string {
+	return fmt.aprintf(
+		"invalid token: %s at line %d col %d",
+		e.token,
+		e.line,
+		e.col,
+		allocator = allocator,
+	)
+}
+
+Error_Message :: enum {
+	// Tokenizer
+	Invalid_Number,
+
+	// Parser
+	Invalid_Token,
+	Expected_EOF,
+
+	// Runtime
+	Division_By_Zero,
+}
+
+error_message_string :: proc(e: Error_Message, allocator: mem.Allocator) -> string {
+	switch e {
+	case .Invalid_Number:
+		return "invalid number"
+	case .Invalid_Token:
+		return "invalid token"
+	case .Expected_EOF:
+		return "expected EOF"
+	case .Division_By_Zero:
+		return "division by zero"
+	}
+	assert(false, fmt.aprintf("unreachable: invalid error message: %v", e, allocator = allocator))
+	return ""
+}
+
+Error_Type :: enum {
+	Parse,
+	Runtime,
+}
+
+Error_With_Message :: struct {
+	message: Error_Message,
+	type:    Error_Type,
+	line:    int,
+	col:     int,
+	meta:    string,
+}
+
 Error :: union {
-	string,
 	runtime.Allocator_Error,
+	Error_With_Message,
+}
+
+error_string :: proc(e: Error, allocator: mem.Allocator) -> string {
+	switch e in e {
+	case runtime.Allocator_Error:
+		return fmt.aprintf("allocator error: %s", e, allocator = allocator)
+	case Error_With_Message:
+		msg := fmt.aprintf(
+			"%s error: %s at line %d col %d",
+			e.type,
+			error_message_string(e.message, allocator),
+			e.line,
+			e.col,
+			allocator = allocator,
+		)
+		if e.meta != "" {
+			msg = fmt.aprintf("%s: %s", msg, e.meta, allocator = allocator)
+		}
+		return msg
+	}
+
+	assert(false, fmt.aprintf("unreachable: invalid error: %v", e, allocator = allocator))
+	return ""
 }
 
 // tokenizer
@@ -28,7 +107,8 @@ Token_Type :: enum {
 Token :: struct {
 	type:  Token_Type,
 	value: f32,
-	pos:   int,
+	line:  int,
+	col:   int,
 }
 
 token_string :: proc(t: Token, allocator: mem.Allocator) -> string {
@@ -58,24 +138,30 @@ tokenize :: proc(s: string, allocator: mem.Allocator) -> ([]Token, Error) {
 	}
 
 	i: int
+	line := 1
+
 	for i < len(s) {
 		c := runes[i]
 		increment := true
 		defer if increment {i += 1}
 
-		if c == ' ' || c == '\t' || c == '\n' {
+		if c == ' ' || c == '\t' {
+			continue
+		}
+		if c == '\n' {
+			line += 1
 			continue
 		}
 
 		switch c {
 		case '+':
-			append(&tokens, Token{type = .Plus, pos = i})
+			append(&tokens, Token{type = .Plus, col = i, line = line})
 		case '-':
-			append(&tokens, Token{type = .Minus, pos = i})
+			append(&tokens, Token{type = .Minus, col = i, line = line})
 		case '*':
-			append(&tokens, Token{type = .Star, pos = i})
+			append(&tokens, Token{type = .Star, col = i, line = line})
 		case '/':
-			append(&tokens, Token{type = .Slash, pos = i})
+			append(&tokens, Token{type = .Slash, col = i, line = line})
 		case:
 			is_number :: proc(c: rune) -> bool {
 				return (c >= '0' && c <= '9') || c == '.'
@@ -90,38 +176,45 @@ tokenize :: proc(s: string, allocator: mem.Allocator) -> ([]Token, Error) {
 
 				num, ok := strconv.parse_f32(s[start:i])
 				if !ok {
-					return nil, fmt.aprintf(
-						"invalid number: %s at %d",
-						s[start:i],
-						start,
-						allocator = allocator,
-					)
+					return nil, Error_With_Message {
+						message = .Invalid_Number,
+						type = .Parse,
+						line = line,
+						col = start,
+						meta = s[start:i],
+					}
 				}
 
-				append(&tokens, Token{type = .Number, value = num, pos = start})
+				append(&tokens, Token{type = .Number, value = num, col = start, line = line})
+			} else {
+				return nil, Error_With_Message {
+					message = .Invalid_Token,
+					type = .Parse,
+					line = line,
+					col = i,
+					meta = s[i:i + 1],
+				}
 			}
 		}
 	}
 
-	append(&tokens, Token{type = .EOF, pos = len(s)})
+	append(&tokens, Token{type = .EOF, col = len(s)})
 	return tokens[:], nil
 }
 
 // Parser
 
-Factor_Node :: struct {
-	value: f32,
-}
+Factor_Node :: Token
 
 Unary_Node :: struct {
-	op:    Token_Type,
+	op:    Token,
 	right: Node,
 }
 
 Binary_Node :: struct {
 	left:  Node,
 	right: Node,
-	op:    Token_Type,
+	op:    Token,
 }
 
 Node :: union {
@@ -135,11 +228,16 @@ node_string :: proc(n: Node, allocator: mem.Allocator) -> string {
 	case ^Factor_Node:
 		return fmt.aprintf("F(%f)", n.value, allocator = allocator)
 	case ^Unary_Node:
-		return fmt.aprintf("U(%d%s)", n.op, node_string(n.right, allocator), allocator = allocator)
+		return fmt.aprintf(
+			"U(%s%s)",
+			n.op.type,
+			node_string(n.right, allocator),
+			allocator = allocator,
+		)
 	case ^Binary_Node:
 		return fmt.aprintf(
-			"B(%d %s %s)",
-			n.op,
+			"B(%s %s %s)",
+			n.op.type,
 			node_string(n.left, allocator),
 			node_string(n.right, allocator),
 			allocator = allocator,
@@ -166,7 +264,18 @@ parser_peek :: proc(p: ^Parser) -> (t: Token, ok: bool) {
 parser_eat :: proc(p: ^Parser, expected: Token_Type) -> (t: Token, err: Error) {
 	t = p.tokens[p.token_idx]
 	if t.type != expected {
-		err = fmt.aprintf("expected %d, got %d", expected, t.type, allocator = p.allocator)
+		err = Error_With_Message {
+			message = .Invalid_Token,
+			type    = .Parse,
+			line    = t.line,
+			col     = t.col,
+			meta    = fmt.aprintf(
+				"expected: %s, got: %s",
+				expected,
+				t.type,
+				allocator = p.allocator,
+			),
+		}
 		return
 	}
 	p.token_idx += 1
@@ -183,6 +292,8 @@ parse_factor :: proc(p: ^Parser) -> (^Factor_Node, Error) {
 
 	n := new(Factor_Node, allocator = p.allocator)
 	n.value = number.value
+	n.line = number.line
+	n.col = number.col
 	return n, nil
 }
 
@@ -193,7 +304,7 @@ parse_unary :: proc(p: ^Parser) -> (Node, Error) {
 		p.token_idx += 1
 
 		un := new(Unary_Node, allocator = p.allocator)
-		un.op = sign.type
+		un.op = sign
 
 		err: Error
 		un.right, err = parse_unary(p)
@@ -206,6 +317,7 @@ parse_unary :: proc(p: ^Parser) -> (Node, Error) {
 
 parse_term :: proc(p: ^Parser) -> (n: Node, err: Error) {
 	// term => unary ('*' | '/' unary )*
+
 	n = parse_unary(p) or_return
 
 	for {
@@ -221,7 +333,7 @@ parse_term :: proc(p: ^Parser) -> (n: Node, err: Error) {
 		bn := new(Binary_Node, allocator = p.allocator)
 		bn.left = n
 		bn.right = right
-		bn.op = sign.type
+		bn.op = sign
 
 		n = bn
 	}
@@ -247,7 +359,7 @@ parse_expr :: proc(p: ^Parser) -> (n: Node, err: Error) {
 		bn := new(Binary_Node, allocator = p.allocator)
 		bn.left = n
 		bn.right = right
-		bn.op = sign.type
+		bn.op = sign
 
 		n = bn
 	}
@@ -262,8 +374,53 @@ parser_run :: proc(p: ^Parser) -> (n: Node, err: Error) {
 	}
 	eof := p.tokens[p.token_idx]
 	if eof.type != .EOF {
-		err = "expected EOF"
+		err = Error_With_Message {
+			message = .Expected_EOF,
+			type    = .Parse,
+			line    = eof.line,
+			col     = eof.col,
+		}
 	}
+	return
+}
+
+interpret :: proc(n: Node, allocator: mem.Allocator) -> (val: f32, err: Error) {
+	switch n in n {
+	case ^Factor_Node:
+		return n.value, nil
+	case ^Unary_Node:
+		val = interpret(n.right, allocator) or_return
+		if n.op.type == .Minus {
+			val = -val
+		}
+		return
+	case ^Binary_Node:
+		left := interpret(n.left, allocator) or_return
+		right := interpret(n.right, allocator) or_return
+		#partial switch n.op.type {
+		case .Plus:
+			val = left + right
+		case .Minus:
+			val = left - right
+		case .Star:
+			val = left * right
+		case .Slash:
+			if right == 0 {
+				err = Error_With_Message {
+					message = .Division_By_Zero,
+					type    = .Runtime,
+					line    = n.op.line,
+					col     = n.op.col,
+				}
+				return
+			}
+			val = left / right
+		}
+
+		return
+	}
+
+	assert(false, fmt.aprintf("unreachable: invalid node: %v", n, allocator = allocator))
 	return
 }
 
@@ -275,9 +432,9 @@ main :: proc() {
 	}
 	allocator := virtual.arena_allocator(&arena)
 
-	tokens, err := tokenize("5 + 3 - 2 * 4 / 5", allocator)
+	tokens, err := tokenize("3 - 2 * 4 / 0", allocator)
 	if err != nil {
-		fmt.println(err)
+		fmt.println(error_string(err, allocator))
 		return
 	}
 
@@ -294,9 +451,17 @@ main :: proc() {
 	n: Node
 	n, err = parser_run(&parser)
 	if err != nil {
-		fmt.println(err)
+		fmt.println(error_string(err, allocator))
 		return
 	}
 
 	fmt.println(node_string(n, allocator))
+
+	val: f32
+	val, err = interpret(n, allocator)
+	if err != nil {
+		fmt.println(error_string(err, allocator))
+		return
+	}
+	fmt.println(val)
 }
