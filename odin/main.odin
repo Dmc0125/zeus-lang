@@ -12,7 +12,7 @@ import os_old "core:os/old"
 import "toolchain"
 
 Repl_Mode :: enum {
-    None,
+	None,
 	Tokenizer, // prints tokens
 	Parser, // prints AST
 	Interpreter, // prints interpreted value
@@ -70,26 +70,25 @@ main :: proc() {
 				continue
 			}
 
-			parser: toolchain.Parser
-			toolchain.parser_init(&parser, tokens, allocator)
-
-			if err = toolchain.parser_run(&parser); err != nil {
+			program: toolchain.Program
+			program, err = toolchain.parse_program(tokens, allocator)
+			if err != nil {
 				fmt.println(toolchain.error_string(err, allocator))
 				continue
 			}
 
+
 			if args.repl_mode == .Parser {
-				for stmt in parser.statements {
-					fmt.printf("%s;\n", toolchain.node_string(stmt, allocator))
+				for stmt in program.statements {
+					fmt.printf("%s;\n", toolchain.ast_node_string(stmt, allocator))
 				}
 				continue
 			}
 
-			for stmt in parser.statements {
+			for stmt in program.statements {
 				if err = toolchain.interpreter_run(&interpreter, stmt); err != nil {
 					fmt.println(toolchain.error_string(err, allocator))
 				}
-				// fmt.println(interpreter.last_interpreted)
 			}
 		}
 	} else {

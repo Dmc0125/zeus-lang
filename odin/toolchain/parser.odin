@@ -4,89 +4,123 @@ import "base:runtime"
 import "core:fmt"
 import "core:mem"
 
-Literal :: Token
+Literal_Number :: struct {
+	value: f32,
+	line:  int,
+	col:   int,
+}
+
+Literal_Ident :: struct {
+	name: string,
+	line: int,
+	col:  int,
+}
+
+Literal :: union {
+	^Literal_Number,
+	^Literal_Ident,
+}
 
 Unary_Expr :: struct {
 	op:    Token,
-	right: Node,
+	right: Expression,
 }
 
 Binary_Expr :: struct {
-	left:  Node,
-	right: Node,
+	left:  Expression,
+	right: Expression,
 	op:    Token,
 }
 
-Variable_Declaration :: struct {
-	ident:       string,
-	initializer: Node,
-}
-
-Print_Statement :: struct {
-	expr: Node,
-}
-
-Node :: union {
-	// Statements
-	^Variable_Declaration,
-	^Print_Statement,
-
-	// Expressions
-	^Literal,
+Expression :: union {
+	Literal,
 	^Unary_Expr,
 	^Binary_Expr,
 }
 
-node_string :: proc(n: Node, allocator: mem.Allocator) -> string {
+expression_string :: proc(n: Expression, allocator: mem.Allocator) -> string {
 	switch n in n {
-	case ^Literal:
-		return fmt.aprintf("Literal(%f)", n.value, allocator = allocator)
+	case Literal:
+		switch l in n {
+		case ^Literal_Number:
+			return fmt.aprintf("Literal_Number(%f)", l.value, allocator = allocator)
+		case ^Literal_Ident:
+			return fmt.aprintf("Literal_Ident(%s)", l.name, allocator = allocator)
+		}
 	case ^Unary_Expr:
 		return fmt.aprintf(
 			"Unary(%s%s)",
 			n.op.type,
-			node_string(n.right, allocator),
+			expression_string(n.right, allocator),
 			allocator = allocator,
 		)
 	case ^Binary_Expr:
 		return fmt.aprintf(
 			"Binary(%s %s %s)",
 			n.op.type,
-			node_string(n.left, allocator),
-			node_string(n.right, allocator),
+			expression_string(n.left, allocator),
+			expression_string(n.right, allocator),
 			allocator = allocator,
 		)
+	}
+	assert(false, "unreachable")
+	return ""
+}
+
+Variable_Declaration :: struct {
+	ident:       string,
+	initializer: Expression,
+}
+
+Print_Statement :: struct {
+	expr: Expression,
+}
+
+Statement :: union {
+	^Variable_Declaration,
+	^Print_Statement,
+}
+
+statement_string :: proc(s: Statement, allocator: mem.Allocator) -> string {
+	switch s in s {
 	case ^Variable_Declaration:
-		if n.initializer == nil {
-			return fmt.aprintf("VarDecl(%s)", n.ident, allocator = allocator)
+		if s.initializer == nil {
+			return fmt.aprintf("VarDecl(%s)", s.ident, allocator = allocator)
 		} else {
 			return fmt.aprintf(
 				"VarDecl(%s = %s)",
-				n.ident,
-				node_string(n.initializer, allocator),
+				s.ident,
+				expression_string(s.initializer, allocator),
 				allocator = allocator,
 			)
 		}
 	case ^Print_Statement:
-		return fmt.aprintf("Print(%s)", node_string(n.expr, allocator), allocator = allocator)
+		return fmt.aprintf(
+			"Print(%s)",
+			expression_string(s.expr, allocator),
+			allocator = allocator,
+		)
 	}
-	return "nil"
+	assert(false, "unreachable")
+	return ""
 }
 
-Parser :: struct {
+ast_node_string :: proc {
+	statement_string,
+	expression_string,
+}
+
+Program :: struct {
 	allocator:  mem.Allocator,
-	tokens:     []Token,
+	statements: [dynamic]Statement,
+
+	//
+	err:        Error,
 	token_idx:  int,
-	statements: [dynamic]Node,
+	tokens:     []Token,
 }
 
-parser_init :: proc(p: ^Parser, tokens: []Token, allocator: mem.Allocator) {
-	p.allocator = allocator
-	p.tokens = tokens
-	p.statements = make([dynamic]Node, 0, allocator = allocator)
-}
-
-parser_peek :: proc(p: ^Parser) -> (t: Token, ok: bool) {
+parser_peek :: proc(p: ^Program) -> (t: Token, ok: bool) {
 	if len(p.tokens) <= p.token_idx {
 		return
 	}
@@ -95,7 +129,11 @@ parser_peek :: proc(p: ^Parser) -> (t: Token, ok: bool) {
 	return
 }
 
-parser_eat :: proc(p: ^Parser, expected: Token_Type) -> (t: Token, err: Error) {
+parser_eat :: proc(p: ^Program, expected: Token_Type) -> (t: Token, err: Error) {
+	if p.token_idx >= len(p.tokens) {
+		panic("unexpected EOF")
+	}
+
 	t = p.tokens[p.token_idx]
 	if t.type != expected {
 		err = Error_With_Message {
@@ -116,27 +154,28 @@ parser_eat :: proc(p: ^Parser, expected: Token_Type) -> (t: Token, err: Error) {
 	return
 }
 
-parse_literal :: proc(p: ^Parser) -> (^Literal, Error) {
-	// factor => number
+parse_literal_number :: proc(p: ^Program) -> (Literal, Error) {
+	// primary => number
 
 	number, err := parser_eat(p, .Number)
 	if err != nil {
 		return nil, err
 	}
 
-	n := new(Literal, allocator = p.allocator)
-	n^ = Literal {
-		type      = .Number,
-		value     = number.value,
-		line      = number.line,
-		col_start = number.col_start,
-		col_end   = number.col_end,
+	v, ok := number.value.(f32)
+	assert(ok, "number value must be f32")
+
+	n := new(Literal_Number, allocator = p.allocator)
+	n^ = Literal_Number {
+		value = v,
+		line  = number.line,
+		col   = number.col_start,
 	}
 	return n, nil
 }
 
-parse_unary :: proc(p: ^Parser) -> (Node, Error) {
-	// unary => '-' | '+' | factor
+parse_unary :: proc(p: ^Program) -> (Expression, Error) {
+	// unary => '-' | '+' | unary
 
 	if sign, ok := parser_peek(p); ok && (sign.type == .Minus || sign.type == .Plus) {
 		p.token_idx += 1
@@ -150,11 +189,11 @@ parse_unary :: proc(p: ^Parser) -> (Node, Error) {
 		return un, err
 	}
 
-	return parse_literal(p)
+	return parse_literal_number(p)
 }
 
-parse_term :: proc(p: ^Parser) -> (n: Node, err: Error) {
-	// term => unary ('*' | '/' unary )*
+parse_factor :: proc(p: ^Program) -> (n: Expression, err: Error) {
+	// factor => unary ('*' | '/' unary )*
 
 	n = parse_unary(p) or_return
 
@@ -165,7 +204,7 @@ parse_term :: proc(p: ^Parser) -> (n: Node, err: Error) {
 		}
 		p.token_idx += 1
 
-		right: Node
+		right: Expression
 		right = parse_unary(p) or_return
 
 		bn := new(Binary_Expr, allocator = p.allocator)
@@ -179,53 +218,61 @@ parse_term :: proc(p: ^Parser) -> (n: Node, err: Error) {
 	return
 }
 
-parse_expr :: proc(p: ^Parser) -> (n: Node, err: Error) {
-	// expr => unary ('+' | '-' unary)*
+parse_expr :: proc(p: ^Program) -> (expr: Expression, err: Error) {
+	// expr => ident | (factor ('+' | '-' factor)*)
 
-	n = parse_term(p) or_return
-
-	for {
-		sign := parser_peek(p) or_break
-		if sign.type != .Minus && sign.type != .Plus {
-			break
-		}
+	if ident, ok := parser_peek(p); ok && ident.type == .Ident {
 		p.token_idx += 1
+		name, ok := ident.value.(string)
+		assert(ok, "ident value must be string")
 
-		right: Node
-		right = parse_term(p) or_return
+		lit := new(Literal_Ident, allocator = p.allocator)
+		lit^ = Literal_Ident {
+			name = name,
+			line = ident.line,
+			col  = ident.col_start,
+		}
+		expr = Literal(lit)
+		return
+	}
 
-		bn := new(Binary_Expr, allocator = p.allocator)
-		bn.left = n
-		bn.right = right
-		bn.op = sign
+	if expr, err = parse_factor(p); err == nil {
+		for {
+			sign := parser_peek(p) or_break
+			if sign.type != .Minus && sign.type != .Plus {
+				break
+			}
+			p.token_idx += 1
 
-		n = bn
+			right: Expression
+			right = parse_factor(p) or_return
+
+			bn := new(Binary_Expr, allocator = p.allocator)
+			bn.left = expr
+			bn.right = right
+			bn.op = sign
+
+			expr = bn
+		}
 	}
 
 	return
 }
 
-parse_variable_decl :: proc(p: ^Parser) -> (ok: bool, err: Error) {
+parse_variable_decl :: proc(p: ^Program) -> (ok: bool, err: Error) {
 	// variable_decl => ident ':=' expr | ident
 
 	if token, tok := parser_peek(p); tok && token.type == .Ident {
 		p.token_idx += 1
 
-		ident, ok := token.value.(string)
-		if !ok {
-			err = Error_With_Message {
-				message = .Expected_Identifier_Name,
-				type    = .Parse,
-				line    = token.line,
-				col     = token.col_start,
-			}
-			return
-		}
+		ident: string
+		ident, ok = token.value.(string)
+		assert(ok, "ident value must be string")
 
 		ident_node := new(Variable_Declaration, allocator = p.allocator)
 		ident_node.ident = ident
 
-		if token, ok := parser_peek(p); ok && token.type == .ColonEqual {
+		if token, tok := parser_peek(p); tok && token.type == .ColonEqual {
 			p.token_idx += 1
 			ident_node.initializer = parse_expr(p) or_return
 		}
@@ -237,8 +284,8 @@ parse_variable_decl :: proc(p: ^Parser) -> (ok: bool, err: Error) {
 	return
 }
 
-parse_print_stmt :: proc(p: ^Parser) -> (ok: bool, err: Error) {
-	// print_stmt => 'print' expr ';'
+parse_print_stmt :: proc(p: ^Program) -> (ok: bool, err: Error) {
+	// print_stmt => 'print' expr
 
 	if token, tok := parser_peek(p); tok && token.type == .Print {
 		p.token_idx += 1
@@ -253,46 +300,53 @@ parse_print_stmt :: proc(p: ^Parser) -> (ok: bool, err: Error) {
 	return
 }
 
-parse_stmt :: proc(p: ^Parser) -> (err: Error) {
+parse_stmt :: proc(p: ^Program) {
 	// stmt => variable_decl ';'
 
-	ok := parse_variable_decl(p) or_return
-	if !ok {
-		ok = parse_print_stmt(p) or_return
-	}
-	if !ok {
-		err = Error_With_Message {
-			message = .Invalid_Token,
-			type    = .Parse,
+	parse :: proc(p: ^Program) -> (err: Error) {
+		if ok := parse_variable_decl(p) or_return; ok {
+			return
 		}
+		if ok := parse_print_stmt(p) or_return; ok {
+			return
+		}
+		return Error_With_Message{message = .Invalid_Token, type = .Parse}
+	}
+
+	if err := parse(p); err != nil {
+		p.err = err
 		return
 	}
 
-	if token, ok := parser_peek(p); !ok {
-		err = Error_With_Message {
-			message = .Expected_EOF,
-			type    = .Parse,
-		}
-		return
-	} else if token.type != .Semicolon {
-		err = Error_With_Message {
-			message = .Expected_Semicolon,
-			type    = .Parse,
-			line    = token.line,
-			col     = token.col_start,
-		}
-		return
+	if token, err := parser_eat(p, .Semicolon); err != nil {
+		p.err = err
 	}
 
-	p.token_idx += 1
 	return
 }
 
-parser_run :: proc(p: ^Parser) -> (err: Error) {
-	for {
-		parse_stmt(p) or_return
+parse_program :: proc(
+	tokens: []Token,
+	allocator: mem.Allocator,
+) -> (
+	program: Program,
+	err: Error,
+) {
+	program = Program {
+		allocator  = allocator,
+		statements = make([dynamic]Statement, 0, allocator = allocator),
+		tokens     = tokens,
+	}
 
-		if token, ok := parser_peek(p); !ok {
+	for {
+		parse_stmt(&program)
+
+		if program.err != nil {
+			err = program.err
+			return
+		}
+
+		if token, ok := parser_peek(&program); !ok {
 			err = Error_With_Message {
 				message = .Expected_EOF,
 				type    = .Parse,
@@ -302,4 +356,6 @@ parser_run :: proc(p: ^Parser) -> (err: Error) {
 			return
 		}
 	}
+
+	return
 }
