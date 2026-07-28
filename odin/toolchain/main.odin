@@ -95,4 +95,3 @@ error_string :: proc(e: Error, allocator: mem.Allocator) -> string {
 	assert(false, fmt.aprintf("unreachable: invalid error: %v", e, allocator = allocator))
 	return ""
 }
-
