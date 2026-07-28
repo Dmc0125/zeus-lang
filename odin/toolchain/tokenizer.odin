@@ -1,9 +1,44 @@
 #+vet explicit-allocators
 package toolchain
 
+import "base:runtime"
 import "core:fmt"
 import "core:mem"
 import "core:strconv"
+
+Tokenizer_Error_Invalid_Token :: struct {
+	value: string,
+	line:  int,
+	col:   int,
+}
+
+tokenizer_error_invalid_token_string :: proc(
+	e: Tokenizer_Error_Invalid_Token,
+	allocator: mem.Allocator,
+) -> string {
+	return fmt.aprintf(
+		"invalid token: \"%s\" at line %d col %d",
+		e.value,
+		e.line,
+		e.col,
+		allocator = allocator,
+	)
+}
+
+Tokenizer_Error :: union {
+	runtime.Allocator_Error,
+	Tokenizer_Error_Invalid_Token,
+}
+
+tokenizer_error_string :: proc(e: Tokenizer_Error, allocator: mem.Allocator) -> string {
+	switch e in e {
+	case runtime.Allocator_Error:
+		return fmt.aprintf("allocator error: %s", e, allocator = allocator)
+	case Tokenizer_Error_Invalid_Token:
+		return tokenizer_error_invalid_token_string(e, allocator)
+	}
+	panic("unreachable")
+}
 
 Token_Type :: enum {
 	None,
@@ -76,7 +111,6 @@ Tokenizer :: struct {
 	allocator: mem.Allocator,
 	s:         string,
 	i:         int,
-	col, line: int,
 }
 
 tokenizer_init :: proc(t: ^Tokenizer, s: string, allocator: mem.Allocator) {
@@ -117,17 +151,21 @@ tokenizer_eat_keyword :: proc(t: ^Tokenizer, s: string) -> bool {
 	return true
 }
 
-tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Error) {
+tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Tokenizer_Error) {
 	tokens, err := make([dynamic]Token, 0, allocator = t.allocator)
 	if err != nil {
 		return nil, err
 	}
 
-	token_single := proc(type: Token_Type, i, line: int, value: Token_Value = 0) -> Token {
+	token_single := proc(type: Token_Type, i, line: int, value: Token_Value = nil) -> Token {
 		return Token{type = type, col_start = i, line = line, col_end = i + 1, value = value}
 	}
 
-	token_multi := proc(type: Token_Type, start, end, line: int, value: Token_Value = 0) -> Token {
+	token_multi := proc(
+		type: Token_Type,
+		start, end, line: int,
+		value: Token_Value = nil,
+	) -> Token {
 		return Token{type = type, col_start = start, col_end = end, line = line, value = value}
 	}
 
@@ -145,7 +183,7 @@ tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Error) {
 			continue
 		}
 
-		defer col += 1
+		defer if increment {col += 1}
 
 		if c == ' ' || c == '\t' {
 			continue
@@ -168,10 +206,12 @@ tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Error) {
 			t.i += 1
 
 			if nb, ok := tokenizer_peek(t); nb == '=' {
-				append(&tokens, token_multi(.ColonEqual, col, col + 1, line))
+				append(&tokens, token_multi(.ColonEqual, col, col + 2, line))
 				t.i += 1
+				col += 2
 			} else {
 				append(&tokens, token_single(.Colon, col, line))
+				col += 1
 			}
 		case:
 			is_number :: proc(c: byte) -> bool {
@@ -184,23 +224,27 @@ tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Error) {
 
 			if is_number(c) {
 				increment = false
-
 				start_col := col
 				start := t.i
+
+				t.i += 1
+				col += 1
+
 				for t.i < len(t.s) && is_number(t.s[t.i]) {
-					col += 1
 					t.i += 1
+					col += 1
 				}
 
 				num, ok := strconv.parse_f32(t.s[start:t.i])
 				if !ok {
-					return nil, Error_With_Message {
-						message = .Invalid_Number,
-						type = .Parse,
-						line = line,
-						col = start_col,
-						meta = t.s[start:t.i],
-					}
+					panic("TODO")
+					// return nil, Error_With_Message {
+					// 	message = .Invalid_Number,
+					// 	type = .Parse,
+					// 	line = line,
+					// 	col = start_col,
+					// 	meta = t.s[start:t.i],
+					// }
 				}
 
 				append(&tokens, token_multi(.Number, start_col, col, line, num))
@@ -226,12 +270,10 @@ tokenizer_run :: proc(t: ^Tokenizer) -> ([]Token, Error) {
 					append(&tokens, token_multi(.Ident, start_col, col, line, ident))
 				}
 			} else {
-				return nil, Error_With_Message {
-					message = .Invalid_Token,
-					type = .Parse,
+				return nil, Tokenizer_Error_Invalid_Token {
+					value = t.s[t.i:t.i + 1],
 					line = line,
 					col = col,
-					meta = t.s[t.i:t.i + 1],
 				}
 			}
 		}
