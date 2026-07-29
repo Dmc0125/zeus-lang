@@ -9,7 +9,7 @@ sealed interface Expression {
 
 sealed interface Statement {
     data class VariableDeclaration(val name: String, val value: Expression?) : Statement
-    data class Print(val expression: Expression) : Statement
+    data class Print(val expression: Expression, val ln: Boolean) : Statement
 }
 
 class Parser(
@@ -130,7 +130,7 @@ class Parser(
             is TokenValue.Print -> {
                 // print => 'print' expression
                 this.idx += 1
-                Statement.Print(this.parseExpression())
+                Statement.Print(this.parseExpression(), next.value.ln)
             }
 
             else -> throw IllegalArgumentException("unexpected token: ${next.value}")

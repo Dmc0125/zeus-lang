@@ -1,12 +1,45 @@
 package lang
 
+import java.io.PrintStream
+
+class BufferedPrinter(
+    val capacity: Int = 4096,
+    val output: PrintStream = System.out
+) {
+    val sb = StringBuilder()
+
+    fun print(text: String) {
+        this.sb.append(text)
+        if (this.sb.length >= this.capacity) {
+            this.flush()
+        }
+    }
+
+    fun println(text: String) {
+        this.sb.append(text)
+        this.sb.append("\n")
+        if (this.sb.length >= this.capacity) {
+            this.flush()
+        }
+    }
+
+    fun flush() {
+        output.print(this.sb)
+        this.sb.clear()
+    }
+}
+
 sealed interface VariableValue {
-    data class Double(val value: kotlin.Double) : VariableValue
+    data class Double(val value: kotlin.Double) : VariableValue {
+        override fun toString(): String = this.value.toString()
+    }
 }
 
 class Interpreter(
-    var variables: MutableMap<String, VariableValue> = mutableMapOf(),
+    val printer: BufferedPrinter? = null,
 ) {
+    var variables: MutableMap<String, VariableValue> = mutableMapOf()
+
     fun interpretUnary(expression: Expression.Unary): VariableValue {
         val value = interpretExpression(expression.operand)
         return when (value) {
@@ -67,7 +100,14 @@ class Interpreter(
                 }
 
                 is Statement.Print -> {
-                    throw UnsupportedOperationException("Print statement not supported")
+                    if (this.printer != null) {
+                        val text = interpretExpression(statement.expression).toString()
+                        if (statement.ln) {
+                            this.printer.println(text)
+                        } else {
+                            this.printer.print(text)
+                        }
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ package lang
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
@@ -13,7 +14,7 @@ import kotlin.test.assertIs
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
-        val input = "+-* / :=;print "
+        val input = "+-* / :=;print println"
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -23,7 +24,8 @@ class TokenizerTest {
             Token(TokenValue.Slash, 1, 5),
             Token(TokenValue.ColonEqual, 1, 7),
             Token(TokenValue.Semicolon, 1, 9),
-            Token(TokenValue.Print, 1, 10)
+            Token(TokenValue.Print(false), 1, 10),
+            Token(TokenValue.Print(true), 1, 16)
         )
 
         assertTrue(tokens.size == expected.size)
@@ -317,7 +319,7 @@ class ParserTest {
     @Test
     fun `parses print statement`() {
         val tokens = listOf(
-            Token(TokenValue.Print, 1, 1),
+            Token(TokenValue.Print(false), 1, 1),
             Token(TokenValue.Number(123.45), 1, 6),
             Token(TokenValue.Semicolon, 1, 11),
         )
@@ -328,6 +330,7 @@ class ParserTest {
         assertTrue(stmt is Statement.Print)
         assertTrue(stmt.expression is Expression.NumberLiteral)
         assertEquals(123.45, stmt.expression.value)
+        assertFalse(stmt.ln)
     }
 }
 
@@ -339,5 +342,19 @@ class InterpreterTest {
         interpreter.interpretProgram(listOf(stmt))
 
         assertEquals(VariableValue.Double(12.0), interpreter.variables["foo"])
+    }
+
+    @Test
+    fun `interprets print statement`() {
+        val printer = BufferedPrinter()
+
+        val interpreter = Interpreter(printer)
+        val stmt = listOf(
+            Statement.Print(Expression.NumberLiteral(123.45), false),
+            Statement.Print(Expression.NumberLiteral(22.0), true)
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals("123.4522.0\n", printer.sb.toString())
     }
 }

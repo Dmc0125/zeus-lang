@@ -20,7 +20,7 @@ sealed interface TokenValue {
     data object Semicolon : TokenValue
 
     // keywords
-    data object Print : TokenValue
+    data class Print(val ln: Boolean) : TokenValue
 }
 
 data class Token(
@@ -127,7 +127,8 @@ fun tokenizerRun(input: String): List<Token> {
                     val value = input.substring(startIdx, idx)
 
                     when (value) {
-                        "print" -> tokens.add(Token(TokenValue.Print, line, startCol))
+                        "print" -> tokens.add(Token(TokenValue.Print(false), line, startCol))
+                        "println" -> tokens.add(Token(TokenValue.Print(true), line, startCol))
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }
 
