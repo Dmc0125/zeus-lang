@@ -9,6 +9,7 @@ sealed interface Expression {
 
 sealed interface Statement {
     data class VariableDeclaration(val name: String, val value: Expression?) : Statement
+    data class VariableAssignment(val name: String, val value: Expression) : Statement
     data class Print(val expression: Expression, val ln: Boolean) : Statement
 }
 
@@ -16,15 +17,17 @@ class Parser(
     val tokens: List<Token>,
     var idx: Int = 0,
 ) {
-    fun peek(): Token? {
-        return if (idx < tokens.size) tokens[idx] else null
+    fun peek(offset: Int = 0): Token? {
+        return if (idx + offset < tokens.size) tokens[idx + offset] else null
     }
 
     fun parseLiteral(): Expression {
         // literal => NUMBER | ident
 
         val token = this.peek()
-        check(token != null) { "Unexpected end of input" }
+        check(token != null) {
+            throw UnexpectedEndOfInputError
+        }
 
         when (token.value) {
             is TokenValue.Number -> {
@@ -38,7 +41,7 @@ class Parser(
             }
 
             else -> {
-                throw IllegalArgumentException("Unexpected token: ${token.value}")
+                throw UnexpectedTokenError(token.line, token.col, "${token.value}", "number or variable")
             }
         }
     }
@@ -98,24 +101,41 @@ class Parser(
         }
     }
 
-    fun parseVariableDeclaration(ident: TokenValue.Ident): Statement {
-        // variableDeclaration => (ident ':=' expression | ident)
+    fun parseIdentStatement(ident: TokenValue.Ident): Statement {
+        // identStatement => variableDeclaration | variableAssignment
+        // variableDeclaration => ident ':=' expression | ident
+        // variableAssignment => ident '=' expression
 
         this.idx += 1
-        val operator = this.peek()
+        val next = this.peek() ?: throw UnexpectedEndOfInputError
 
-        if (operator != null && operator.value is TokenValue.ColonEqual) {
-            this.idx += 1
+        when (next.value) {
+            is TokenValue.Semicolon -> {
+                return Statement.VariableDeclaration(
+                    name = ident.name,
+                    value = null,
+                )
+            }
 
-            return Statement.VariableDeclaration(
-                name = ident.name,
-                value = this.parseExpression(),
-            )
-        } else {
-            return Statement.VariableDeclaration(
-                name = ident.name,
-                value = null
-            )
+            is TokenValue.ColonEqual -> {
+                this.idx += 1
+                val value = this.parseExpression()
+                return Statement.VariableDeclaration(
+                    name = ident.name,
+                    value = value,
+                )
+            }
+
+            is TokenValue.Equal -> {
+                this.idx += 1
+                val value = this.parseExpression()
+                return Statement.VariableAssignment(
+                    name = ident.name,
+                    value = value,
+                )
+            }
+
+            else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}")
         }
     }
 
@@ -123,29 +143,32 @@ class Parser(
         // statement => variableDeclaration | print
 
         val next = this.peek()
-        check(next != null) { "unexpected end of input" }
+        check(next != null) { throw UnexpectedEndOfInputError }
 
         val statement = when (next.value) {
-            is TokenValue.Ident -> this.parseVariableDeclaration(next.value)
+            is TokenValue.Ident -> this.parseIdentStatement(next.value)
             is TokenValue.Print -> {
                 // print => 'print' expression
                 this.idx += 1
                 Statement.Print(this.parseExpression(), next.value.ln)
             }
 
-            else -> throw IllegalArgumentException("unexpected token: ${next.value}")
+            else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "identifier or print")
         }
 
         val semicolon = this.peek()
-        check(semicolon != null) { "unexpected end of input" }
-        check(semicolon.value is TokenValue.Semicolon) { "expected semicolon" }
+        check(semicolon != null) { throw UnexpectedEndOfInputError }
+        check(semicolon.value is TokenValue.Semicolon) {
+            // TODO: tokenValue.toString()
+            throw UnexpectedTokenError(semicolon.line, semicolon.col, "${semicolon.value}", ";")
+        }
         this.idx += 1
 
         return statement
     }
 
-    fun parseProgram(): List<Statement> {
-        var statements: List<Statement> = listOf()
+    fun parseProgram(): MutableList<Statement> {
+        var statements: MutableList<Statement> = mutableListOf()
 
         while (this.idx < this.tokens.size) {
             statements += this.parseStatement()

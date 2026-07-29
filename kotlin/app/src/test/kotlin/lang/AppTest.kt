@@ -59,21 +59,21 @@ class TokenizerTest {
     }
 
     @Test
-    fun `throws TokenizerError on invalid number`() {
+    fun `throws SyntaxError on invalid number`() {
         val input = "123.45.67"
-        val expection = assertFailsWith(TokenizerError::class) {
+        val expection = assertFailsWith(SyntaxError::class) {
             tokenizerRun(input)
         }
-        assertEquals("Tokenizer error at 1:10: Invalid number: 123.45.67", expection.message)
+        assertEquals("Syntax error at 1:10: Invalid number: 123.45.67", expection.message)
     }
 
     @Test
-    fun `throws TokenizerError on unexpected character`() {
+    fun `throws SyntaxError on unexpected character`() {
         val input = "@"
-        val expection = assertFailsWith(TokenizerError::class) {
+        val expection = assertFailsWith(SyntaxError::class) {
             tokenizerRun(input)
         }
-        assertEquals("Tokenizer error at 1:1: Unexpected token: @", expection.message)
+        assertEquals("Syntax error at 1:1: Unexpected token: @", expection.message)
     }
 }
 
@@ -356,5 +356,17 @@ class InterpreterTest {
         interpreter.interpretProgram(stmt)
 
         assertEquals("123.4522.0\n", printer.sb.toString())
+    }
+
+    @Test
+    fun `interprets variable assignment`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.VariableDeclaration("foo", Expression.NumberLiteral(12.0)),
+            Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals(VariableValue.Double(22.0), interpreter.variables["foo"])
     }
 }

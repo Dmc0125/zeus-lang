@@ -99,6 +99,14 @@ class Interpreter(
                     }
                 }
 
+                is Statement.VariableAssignment -> {
+                    if (variables.containsKey(statement.name)) {
+                        variables[statement.name] = interpretExpression(statement.value)
+                    } else {
+                        throw IllegalArgumentException("variable ${statement.name} not declared")
+                    }
+                }
+
                 is Statement.Print -> {
                     if (this.printer != null) {
                         val text = interpretExpression(statement.expression).toString()

@@ -1,11 +1,5 @@
 package lang
 
-class TokenizerError(
-    val line: Int,
-    val col: Int,
-    message: String,
-) : RuntimeException("Tokenizer error at $line:$col: $message")
-
 sealed interface TokenValue {
     // literal
     data class Number(val value: Double) : TokenValue
@@ -18,6 +12,7 @@ sealed interface TokenValue {
     data object Slash : TokenValue
     data object ColonEqual : TokenValue
     data object Semicolon : TokenValue
+    data object Equal : TokenValue
 
     // keywords
     data class Print(val ln: Boolean) : TokenValue
@@ -72,6 +67,7 @@ fun tokenizerRun(input: String): List<Token> {
             '*' -> tokens.add(Token(TokenValue.Star, line, col))
             '/' -> tokens.add(Token(TokenValue.Slash, line, col))
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
+            '=' -> tokens.add(Token(TokenValue.Equal, line, col))
 
             // multichar
             ':' -> {
@@ -107,7 +103,7 @@ fun tokenizerRun(input: String): List<Token> {
                         val value = valueStr.toDouble()
                         tokens.add(Token(TokenValue.Number(value), line, startCol))
                     } catch (e: NumberFormatException) {
-                        throw TokenizerError(line, col, "Invalid number: ${valueStr}")
+                        throw SyntaxError(line, col, "Invalid number: ${valueStr}")
                     }
                     continue
                 }
@@ -135,7 +131,7 @@ fun tokenizerRun(input: String): List<Token> {
                     continue
                 }
 
-                throw TokenizerError(line, col, "Unexpected token: ${ch}")
+                throw SyntaxError(line, col, "Unexpected token: ${ch}")
             }
         }
 
