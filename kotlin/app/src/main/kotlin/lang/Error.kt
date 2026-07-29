@@ -22,3 +22,8 @@ class UnexpectedTokenError(
 )
 
 object UnexpectedEndOfInputError : SyntaxError("Unexpected end of input")
+
+class UnterminatedStringError(
+    line: Int,
+    col: Int,
+) : SyntaxError(line, col, "Unterminated string")

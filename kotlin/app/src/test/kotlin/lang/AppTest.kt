@@ -10,7 +10,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
@@ -50,7 +49,31 @@ class TokenizerTest {
     }
 
     @Test
-    fun `parses identifier`() {
+    fun `tokenizes string`() {
+        val input = "\"hello\""
+        val tokens = tokenizerRun(input)
+
+        val expected = listOf(
+            Token(TokenValue.String("hello"), 1, 1)
+        )
+
+        assertTrue(tokens.size == expected.size)
+        for (i in tokens.indices) {
+            assertEquals(expected[i], tokens[i])
+        }
+    }
+
+    @Test
+    fun `throws UnterminatedStringError on unterminated string`() {
+        val input = "\"hello"
+        val expection = assertFailsWith(UnterminatedStringError::class) {
+            tokenizerRun(input)
+        }
+        assertEquals("Syntax error at 1:1: Unterminated string", expection.message)
+    }
+
+    @Test
+    fun `tokenizes identifier`() {
         val input = "foo"
         val tokens = tokenizerRun(input)
 

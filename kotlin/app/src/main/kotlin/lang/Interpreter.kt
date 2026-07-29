@@ -41,7 +41,11 @@ class BufferedPrinter(
 
 sealed interface VariableValue {
     data class Double(val value: kotlin.Double) : VariableValue {
-        override fun toString(): String = this.value.toString()
+        override fun toString(): kotlin.String = this.value.toString()
+    }
+
+    data class String(val value: kotlin.String) : VariableValue {
+        override fun toString(): kotlin.String = this.value
     }
 }
 
@@ -60,6 +64,8 @@ class Interpreter(
                     else -> throw RuntimeException("Invalid unary operator: ${expression.operator}")
                 }
             }
+
+            else -> throw RuntimeException("Invalid operand type: $value; unary requires Double")
         }
     }
 
@@ -93,6 +99,7 @@ class Interpreter(
             }
 
             is Expression.NumberLiteral -> VariableValue.Double(expression.value)
+            is Expression.StringLiteral -> VariableValue.String(expression.value)
             is Expression.Unary -> this.interpretUnary(expression)
             is Expression.Binary -> this.interpretBinary(expression)
         }

@@ -3,6 +3,7 @@ package lang
 sealed interface Expression {
     data class Ident(val name: String) : Expression
     data class NumberLiteral(val value: Double) : Expression
+    data class StringLiteral(val value: String) : Expression
     data class Unary(val operator: TokenValue, val operand: Expression) : Expression
     data class Binary(val operator: TokenValue, val left: Expression, val right: Expression) : Expression
 }
@@ -22,7 +23,7 @@ class Parser(
     }
 
     fun parseLiteral(): Expression {
-        // literal => NUMBER | ident
+        // literal => NUMBER | ident | string
 
         val token = this.peek()
         check(token != null) {
@@ -38,6 +39,11 @@ class Parser(
             is TokenValue.Ident -> {
                 this.idx += 1
                 return Expression.Ident(token.value.name)
+            }
+
+            is TokenValue.String -> {
+                this.idx += 1
+                return Expression.StringLiteral(token.value.value)
             }
 
             else -> {

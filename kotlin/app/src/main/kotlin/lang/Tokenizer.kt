@@ -3,7 +3,8 @@ package lang
 sealed interface TokenValue {
     // literal
     data class Number(val value: Double) : TokenValue
-    data class Ident(val name: String) : TokenValue
+    data class Ident(val name: kotlin.String) : TokenValue
+    data class String(val value: kotlin.String) : TokenValue
 
     // operator
     data object Plus : TokenValue
@@ -83,6 +84,32 @@ fun tokenizerRun(input: String): List<Token> {
                     col += 1
                 }
                 continue
+            }
+
+            '"' -> {
+                idx += 1
+                val startIdx = idx
+
+                val startCol = col
+                col += 1
+
+                while (true) {
+                    val next = peek()
+                    check(next != null) { throw UnterminatedStringError(line, startCol) }
+
+                    if (next == '"') {
+                        break
+                    }
+
+                    idx += 1
+                    col += 1
+                }
+
+                val value = input.substring(startIdx, idx)
+                idx += 1
+                col += 1
+
+                tokens.add(Token(TokenValue.String(value), line, startCol))
             }
 
             else -> {
