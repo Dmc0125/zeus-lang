@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
-        val input = "+-* /"
+        val input = "+-* / :=;print "
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -18,6 +18,9 @@ class TokenizerTest {
             Token(TokenValue.Minus, 1, 2),
             Token(TokenValue.Star, 1, 3),
             Token(TokenValue.Slash, 1, 5),
+            Token(TokenValue.ColonEqual, 1, 7),
+            Token(TokenValue.Semicolon, 1, 9),
+            Token(TokenValue.Print, 1, 10)
         )
 
         assertTrue(tokens.size == expected.size)
@@ -39,6 +42,15 @@ class TokenizerTest {
         for (i in tokens.indices) {
             assertEquals(expected[i], tokens[i])
         }
+    }
+
+    @Test
+    fun `parses identifier`() {
+        val input = "foo"
+        val tokens = tokenizerRun(input)
+
+        assertTrue(tokens.size == 1)
+        assertEquals(Token(TokenValue.Ident("foo"), 1, 1), tokens[0])
     }
 }
 
@@ -200,5 +212,109 @@ class ParserTest {
             assertTrue(right.right is Expression.NumberLiteral)
             assertEquals(3.0, right.right.value)
         }
+    }
+
+    @Test
+    fun `parses variable declaration`() {
+        val tokens = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.Semicolon, 1, 4),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertTrue(stmt is Statement.VariableDeclaration)
+        assertEquals("foo", stmt.name)
+        assertTrue(stmt.value == null)
+    }
+
+    @Test
+    fun `parses variable declaration with expression`() {
+        val tokens = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.ColonEqual, 1, 4),
+            Token(TokenValue.Number(12.0), 1, 6),
+            Token(TokenValue.Semicolon, 1, 7),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertTrue(stmt is Statement.VariableDeclaration)
+        assertEquals("foo", stmt.name)
+        assertTrue(stmt.value is Expression.NumberLiteral)
+        assertEquals(12.0, stmt.value.value)
+    }
+
+    @Test
+    fun `parses indentifier in expression`() {
+        val tokens = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.ColonEqual, 1, 4),
+            Token(TokenValue.Ident("bar"), 1, 5),
+            Token(TokenValue.Semicolon, 1, 8),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertTrue(stmt is Statement.VariableDeclaration)
+        assertEquals("foo", stmt.name)
+        assertTrue(stmt.value is Expression.Ident)
+        assertEquals("bar", stmt.value.name)
+    }
+
+    @Test
+    fun `parses multiple statements`() {
+        val tokens = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.Semicolon, 1, 4),
+            Token(TokenValue.Ident("bar"), 2, 1),
+            Token(TokenValue.Semicolon, 2, 4),
+        )
+
+        val parser = Parser(tokens)
+        val statements = parser.parseProgram()
+        assertEquals(2, statements.size)
+
+        run {
+            val foo = statements[0]
+            assertTrue(foo is Statement.VariableDeclaration)
+            assertEquals("foo", foo.name)
+        }
+
+        run {
+            val bar = statements[1]
+            assertTrue(bar is Statement.VariableDeclaration)
+            assertEquals("bar", bar.name)
+        }
+    }
+
+    @Test
+    fun `parses print statement`() {
+        val tokens = listOf(
+            Token(TokenValue.Print, 1, 1),
+            Token(TokenValue.Number(123.45), 1, 6),
+            Token(TokenValue.Semicolon, 1, 11),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertTrue(stmt is Statement.Print)
+        assertTrue(stmt.expression is Expression.NumberLiteral)
+        assertEquals(123.45, stmt.expression.value)
+    }
+}
+
+class InterpreterTest {
+    @Test
+    fun `interprets variable declaration`() {
+        val interpreter = Interpreter()
+        val stmt = Statement.VariableDeclaration("foo", Expression.NumberLiteral(12.0))
+        interpreter.interpretProgram(listOf(stmt))
+
+        assertEquals(VariableValue.Double(12.0), interpreter.variables["foo"])
     }
 }
