@@ -60,7 +60,7 @@ fun tokenizerRun(input: String): List<Token> {
                 continue
             }
 
-            ' ', '\t' -> {
+            ' ', '\t', '\r' -> {
                 col += 1
                 idx += 1
                 continue

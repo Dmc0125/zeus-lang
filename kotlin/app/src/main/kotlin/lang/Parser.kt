@@ -61,33 +61,41 @@ class Parser(
     fun parseTerm(): Expression {
         // term => unary (('*' | '/') unary)*
 
-        val left = this.parseUnary()
+        var left = this.parseUnary()
 
-        val operator = this.peek()
-        if (operator != null && (operator.value is TokenValue.Star || operator.value is TokenValue.Slash)) {
-            this.idx += 1
+        while (true) {
+            val operator = this.peek()
 
-            val right = this.parseTerm()
-            return Expression.Binary(operator = operator.value, left = left, right = right)
+            when (operator?.value) {
+                is TokenValue.Star, TokenValue.Slash -> {
+                    this.idx += 1
+                    val right = this.parseUnary()
+                    left = Expression.Binary(operator = operator.value, left = left, right = right)
+                }
+
+                else -> return left
+            }
         }
-
-        return left
     }
 
     fun parseExpression(): Expression {
         // expression => term (('+' | '-') term)*
 
-        val left = this.parseTerm()
+        var left = this.parseTerm()
 
-        val operator = this.peek()
-        if (operator != null && (operator.value is TokenValue.Plus || operator.value is TokenValue.Minus)) {
-            this.idx += 1
+        while (true) {
+            val operator = this.peek()
 
-            val right = this.parseExpression()
-            return Expression.Binary(operator = operator.value, left = left, right = right)
+            when (operator?.value) {
+                is TokenValue.Plus, TokenValue.Minus -> {
+                    this.idx += 1
+                    val right = this.parseTerm()
+                    left = Expression.Binary(operator = operator.value, left = left, right = right)
+                }
+
+                else -> return left
+            }
         }
-
-        return left
     }
 
     fun parseVariableDeclaration(ident: TokenValue.Ident): Statement {

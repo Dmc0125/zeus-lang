@@ -7,6 +7,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+
 
 class TokenizerTest {
     @Test
@@ -127,7 +129,7 @@ class ParserTest {
 
     @Test
     fun `parses factor`() {
-        // 123.45 + (67.89 - 3)
+        // (123.45 + 67.89) - 3
         val tokens = listOf(
             Token(TokenValue.Number(123.45), 1, 1),
             Token(TokenValue.Plus, 1, 7),
@@ -138,27 +140,28 @@ class ParserTest {
         val parser = Parser(tokens)
         val expr = parser.parseExpression()
 
-        // 123.45 + (67.89 - 3)
-        assertTrue(expr is Expression.Binary)
-        assertEquals(TokenValue.Plus, expr.operator)
+        // (123.45 + 67.89) - 3
+        assertIs<Expression.Binary>(expr)
+        assertIs<TokenValue.Minus>(expr.operator)
 
-        assertTrue(expr.left is Expression.NumberLiteral)
-        assertEquals(123.45, expr.left.value)
+        // 123.45 + 67.89
+        assertIs<Expression.Binary>(expr.left)
+        assertIs<TokenValue.Plus>(expr.left.operator)
 
-        // 67.89 - 3
-        assertTrue(expr.right is Expression.Binary)
-        assertEquals(TokenValue.Minus, expr.right.operator)
+        assertIs<Expression.NumberLiteral>(expr.left.left)
+        assertEquals(123.45, expr.left.left.value)
 
-        assertTrue(expr.right.left is Expression.NumberLiteral)
-        assertEquals(67.89, expr.right.left.value)
+        assertIs<Expression.NumberLiteral>(expr.left.right)
+        assertEquals(67.89, expr.left.right.value)
 
-        assertTrue(expr.right.right is Expression.NumberLiteral)
-        assertEquals(3.0, expr.right.right.value)
+        // 3
+        assertIs<Expression.NumberLiteral>(expr.right)
+        assertEquals(3.0, expr.right.value)
     }
 
     @Test
     fun `parses term`() {
-        // 123.45 * (25 / 5)
+        // (123.45 * 25) / 5
         val tokens = listOf(
             Token(TokenValue.Number(123.45), 1, 1),
             Token(TokenValue.Star, 1, 7),
@@ -169,22 +172,23 @@ class ParserTest {
         val parser = Parser(tokens)
         val expr = parser.parseExpression()
 
-        // 123.45 * (25 / 5)
-        assertTrue(expr is Expression.Binary)
-        assertEquals(TokenValue.Star, expr.operator)
+        // (123.45 * 25) / 5
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.Slash, expr.operator)
 
-        assertTrue(expr.left is Expression.NumberLiteral)
-        assertEquals(123.45, expr.left.value)
+        // 123.45 * 25
+        assertIs<Expression.Binary>(expr.left)
+        assertEquals(TokenValue.Star, expr.left.operator)
 
-        // 25 / 5
-        assertTrue(expr.right is Expression.Binary)
-        assertEquals(TokenValue.Slash, expr.right.operator)
+        assertIs<Expression.NumberLiteral>(expr.left.left)
+        assertEquals(123.45, expr.left.left.value)
 
-        assertTrue(expr.right.left is Expression.NumberLiteral)
-        assertEquals(25.0, expr.right.left.value)
+        assertIs<Expression.NumberLiteral>(expr.left.right)
+        assertEquals(25.0, expr.left.right.value)
 
-        assertTrue(expr.right.right is Expression.NumberLiteral)
-        assertEquals(5.0, expr.right.right.value)
+        // 5
+        assertIs<Expression.NumberLiteral>(expr.right)
+        assertEquals(5.0, expr.right.value)
     }
 
     @Test
