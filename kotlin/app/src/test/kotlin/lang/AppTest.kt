@@ -6,6 +6,7 @@ package lang
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class TokenizerTest {
     @Test
@@ -51,6 +52,24 @@ class TokenizerTest {
 
         assertTrue(tokens.size == 1)
         assertEquals(Token(TokenValue.Ident("foo"), 1, 1), tokens[0])
+    }
+
+    @Test
+    fun `throws TokenizerError on invalid number`() {
+        val input = "123.45.67"
+        val expection = assertFailsWith(TokenizerError::class) {
+            tokenizerRun(input)
+        }
+        assertEquals("Tokenizer error at 1:10: Invalid number: 123.45.67", expection.message)
+    }
+
+    @Test
+    fun `throws TokenizerError on unexpected character`() {
+        val input = "@"
+        val expection = assertFailsWith(TokenizerError::class) {
+            tokenizerRun(input)
+        }
+        assertEquals("Tokenizer error at 1:1: Unexpected token: @", expection.message)
     }
 }
 
