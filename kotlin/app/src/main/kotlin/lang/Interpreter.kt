@@ -7,25 +7,35 @@ class BufferedPrinter(
     val output: PrintStream = System.out
 ) {
     val sb = StringBuilder()
+    var flushed = false
 
     fun print(text: String) {
+        this.flushed = false
+
         this.sb.append(text)
+
         if (this.sb.length >= this.capacity) {
             this.flush()
         }
     }
 
     fun println(text: String) {
+        this.flushed = false
+
         this.sb.append(text)
         this.sb.append("\n")
+
         if (this.sb.length >= this.capacity) {
             this.flush()
         }
     }
 
     fun flush() {
-        output.print(this.sb)
-        this.sb.clear()
+        if (this.sb.isNotEmpty()) {
+            output.print(this.sb)
+            this.sb.clear()
+            this.flushed = true
+        }
     }
 }
 
