@@ -6,13 +6,22 @@ class Analyzer {
     fun analyzeUnary(expression: Expression.Unary): VariableType {
         val type = this.analyzeExpression(expression.operand)
 
-        if (type != VariableType.Number) {
-            throw RuntimeException("Invalid operand type: $type; unary requires Double")
-        }
+        return when (type) {
+            VariableType.Number -> {
+                when (expression.operator) {
+                    is TokenValue.Minus, is TokenValue.Plus -> type
+                    else -> throw RuntimeException("Invalid operator: ${expression.operator}; unary requires \"-\" or \"+\"")
+                }
+            }
 
-        return when (expression.operator) {
-            is TokenValue.Minus, is TokenValue.Plus -> type
-            else -> throw RuntimeException("Invalid operator: ${expression.operator}; unary requires \"-\" or \"+\"")
+            VariableType.Bool -> {
+                when (expression.operator) {
+                    is TokenValue.Excl -> type
+                    else -> throw RuntimeException("Invalid operator: ${expression.operator}; unary requires \"!\"")
+                }
+            }
+
+            else -> throw RuntimeException("Invalid operand type: $type; unary requires Double")
         }
     }
 
@@ -44,6 +53,7 @@ class Analyzer {
 
             is Expression.NumberLiteral -> VariableType.Number
             is Expression.StringLiteral -> VariableType.String
+            is Expression.BoolLiteral -> VariableType.Bool
             is Expression.Unary -> this.analyzeUnary(expression)
             is Expression.Binary -> this.analyzeBinary(expression)
         }

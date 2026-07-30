@@ -30,6 +30,36 @@ class AnalyzerTest {
     }
 
     @Test
+    fun `does not throw at valid plus unary operator`() {
+        val u = Expression.Unary(
+            TokenValue.Plus,
+            Expression.NumberLiteral(123.0),
+        )
+        val analyzer = Analyzer()
+        analyzer.analyzeUnary(u)
+    }
+
+    @Test
+    fun `does not throw at valid minus unary operator`() {
+        val u = Expression.Unary(
+            TokenValue.Minus,
+            Expression.NumberLiteral(123.0),
+        )
+        val analyzer = Analyzer()
+        analyzer.analyzeUnary(u)
+    }
+
+    @Test
+    fun `does not throw at valid excl unary operator`() {
+        val u = Expression.Unary(
+            TokenValue.Excl,
+            Expression.BoolLiteral(true),
+        )
+        val analyzer = Analyzer()
+        analyzer.analyzeUnary(u)
+    }
+
+    @Test
     fun `throws at invalid binary type`() {
         val b = Expression.Binary(
             TokenValue.Plus,

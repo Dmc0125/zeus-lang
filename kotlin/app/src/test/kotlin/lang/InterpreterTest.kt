@@ -7,6 +7,45 @@ import kotlin.test.*
 
 class InterpreterTest {
     @Test
+    fun `interprets unary bool negation`() {
+        val expr = Expression.Unary(
+            operator = TokenValue.Excl,
+            operand = Expression.BoolLiteral(true),
+        )
+        val interpreter = Interpreter()
+        val result = interpreter.interpretUnary(expr)
+
+        assertEquals(VariableValue.Bool(false), result)
+    }
+
+    @Test
+    fun `interprets unary number negation`() {
+        val expr = Expression.Unary(
+            operator = TokenValue.Minus,
+            operand = Expression.NumberLiteral(12.0),
+        )
+        val interpreter = Interpreter()
+        val result = interpreter.interpretUnary(expr)
+
+        assertEquals(VariableValue.Number(-12.0), result)
+    }
+
+    @Test
+    fun `interprets unary number negation nested`() {
+        val expr = Expression.Unary(
+            operator = TokenValue.Minus,
+            operand = Expression.Unary(
+                operator = TokenValue.Minus,
+                operand = Expression.NumberLiteral(12.0),
+            ),
+        )
+        val interpreter = Interpreter()
+        val result = interpreter.interpretUnary(expr)
+
+        assertEquals(VariableValue.Number(12.0), result)
+    }
+
+    @Test
     fun `interprets variable declaration`() {
         val interpreter = Interpreter()
         val stmt = Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))

@@ -3,12 +3,14 @@ package lang
 sealed interface VariableType {
     data object Number : VariableType
     data object String : VariableType
+    data object Bool : VariableType
 }
 
 sealed interface TokenValue {
     // literal
     data class NumberLiteral(val value: Double) : TokenValue
     data class StringLiteral(val value: kotlin.String) : TokenValue
+    data class BoolLiteral(val value: Boolean) : TokenValue
     data class Ident(val name: kotlin.String) : TokenValue
 
     // operator
@@ -19,6 +21,7 @@ sealed interface TokenValue {
     data object Colon : TokenValue
     data object Semicolon : TokenValue
     data object Equal : TokenValue
+    data object Excl : TokenValue
 
     // keywords
     data class Print(val ln: Boolean) : TokenValue
@@ -76,6 +79,8 @@ fun tokenizerRun(input: String): List<Token> {
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
             '=' -> tokens.add(Token(TokenValue.Equal, line, col))
             ':' -> tokens.add(Token(TokenValue.Colon, line, col))
+            '!' -> tokens.add(Token(TokenValue.Excl, line, col))
+
 
             '"' -> {
                 idx += 1
@@ -143,8 +148,14 @@ fun tokenizerRun(input: String): List<Token> {
                     when (value) {
                         "print" -> tokens.add(Token(TokenValue.Print(false), line, startCol))
                         "println" -> tokens.add(Token(TokenValue.Print(true), line, startCol))
+
                         "number" -> tokens.add(Token(TokenValue.Type(VariableType.Number), line, startCol))
                         "string" -> tokens.add(Token(TokenValue.Type(VariableType.String), line, startCol))
+                        "bool" -> tokens.add(Token(TokenValue.Type(VariableType.Bool), line, startCol))
+
+                        "true" -> tokens.add(Token(TokenValue.BoolLiteral(true), line, startCol))
+                        "false" -> tokens.add(Token(TokenValue.BoolLiteral(false), line, startCol))
+
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }
 

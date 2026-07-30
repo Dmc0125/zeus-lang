@@ -4,6 +4,7 @@ sealed interface Expression {
     data class Ident(val name: String) : Expression
     data class NumberLiteral(val value: Double) : Expression
     data class StringLiteral(val value: String) : Expression
+    data class BoolLiteral(val value: Boolean) : Expression
     data class Unary(val operator: TokenValue, val operand: Expression) : Expression
     data class Binary(val operator: TokenValue, val left: Expression, val right: Expression) : Expression
 }
@@ -23,7 +24,7 @@ class Parser(
     }
 
     fun parseLiteral(): Expression {
-        // literal => number | ident | string
+        // literal => number | ident | string | bool
 
         val token = this.peek()
         check(token != null) {
@@ -46,6 +47,11 @@ class Parser(
                 return Expression.StringLiteral(token.value.value)
             }
 
+            is TokenValue.BoolLiteral -> {
+                this.idx += 1
+                return Expression.BoolLiteral(token.value.value)
+            }
+
             else -> {
                 throw UnexpectedTokenError(token.line, token.col, "${token.value}", "number or variable")
             }
@@ -53,18 +59,24 @@ class Parser(
     }
 
     fun parseUnary(): Expression {
-        // unary => '-' unary | '+' unary | literal
+        // unary => ('-' | '+' | '!' unary) | literal
 
         val token = this.peek()
-        if (token != null && (token.value is TokenValue.Minus || token.value is TokenValue.Plus)) {
-            this.idx += 1
-            return Expression.Unary(
-                operator = token.value,
-                operand = this.parseUnary(),
-            )
+        check(token != null) {
+            throw UnexpectedEndOfInputError
         }
 
-        return this.parseLiteral()
+        return when (token.value) {
+            is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Excl -> {
+                this.idx += 1
+                Expression.Unary(
+                    operator = token.value,
+                    operand = this.parseUnary(),
+                )
+            }
+
+            else -> this.parseLiteral()
+        }
     }
 
     fun parseTerm(): Expression {

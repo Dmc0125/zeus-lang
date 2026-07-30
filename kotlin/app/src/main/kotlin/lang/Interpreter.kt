@@ -47,6 +47,10 @@ sealed interface VariableValue {
     data class String(val value: kotlin.String) : VariableValue {
         override fun toString(): kotlin.String = this.value
     }
+
+    data class Bool(val value: kotlin.Boolean) : VariableValue {
+        override fun toString(): kotlin.String = this.value.toString()
+    }
 }
 
 class Interpreter(
@@ -55,9 +59,18 @@ class Interpreter(
     var variables: MutableMap<String, VariableValue> = mutableMapOf()
 
     fun interpretUnary(expression: Expression.Unary): VariableValue {
-        val value = interpretExpression(expression.operand) as VariableValue.Number
+        val value = interpretExpression(expression.operand)
         return when (expression.operator) {
-            is TokenValue.Minus -> VariableValue.Number(-value.value)
+            is TokenValue.Minus -> {
+                val num = value as VariableValue.Number
+                VariableValue.Number(-num.value)
+            }
+
+            is TokenValue.Excl -> {
+                val bool = value as VariableValue.Bool
+                VariableValue.Bool(!bool.value)
+            }
+
             else -> value
         }
     }
@@ -84,6 +97,7 @@ class Interpreter(
             is Expression.Ident -> variables[expression.name]!!
             is Expression.NumberLiteral -> VariableValue.Number(expression.value)
             is Expression.StringLiteral -> VariableValue.String(expression.value)
+            is Expression.BoolLiteral -> VariableValue.Bool(expression.value)
             is Expression.Unary -> this.interpretUnary(expression)
             is Expression.Binary -> this.interpretBinary(expression)
         }

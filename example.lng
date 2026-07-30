@@ -1,7 +1,12 @@
-x: string;
+x: number;
 
 y := 5;
 x = y + 10;
 
 println x;
 println y;
+
+t: bool;
+t = !true;
+
+println t;

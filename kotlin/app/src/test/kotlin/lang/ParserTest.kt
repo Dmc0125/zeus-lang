@@ -14,7 +14,17 @@ class ParserTest {
     }
 
     @Test
-    fun `parses unary`() {
+    fun `parses bool literal`() {
+        val tokens = listOf(Token(TokenValue.BoolLiteral(true), 1, 1))
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.BoolLiteral>(expr)
+        assertEquals(true, expr.value)
+    }
+
+    @Test
+    fun `parses unary number`() {
         val tokens = listOf(
             Token(TokenValue.Minus, 1, 1),
             Token(TokenValue.NumberLiteral(123.45), 1, 2),
@@ -29,7 +39,22 @@ class ParserTest {
     }
 
     @Test
-    fun `parses unary multiple`() {
+    fun `parses unary bool`() {
+        val tokens = listOf(
+            Token(TokenValue.Excl, 1, 1),
+            Token(TokenValue.BoolLiteral(true), 1, 2),
+        )
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.Unary>(expr)
+        assertEquals(TokenValue.Excl, expr.operator)
+        assertIs<Expression.BoolLiteral>(expr.operand)
+        assertEquals(true, expr.operand.value)
+    }
+
+    @Test
+    fun `parses unary number multiple`() {
         // -(-(-123.45))
         val tokens = listOf(
             Token(TokenValue.Minus, 1, 1),
