@@ -9,7 +9,7 @@ sealed interface Expression {
 }
 
 sealed interface Statement {
-    data class VariableDeclaration(val name: String, val value: Expression?) : Statement
+    data class VariableDeclaration(val name: String, val type: VariableType?, val value: Expression?) : Statement
     data class VariableAssignment(val name: String, val value: Expression) : Statement
     data class Print(val expression: Expression, val ln: Boolean) : Statement
 }
@@ -23,7 +23,7 @@ class Parser(
     }
 
     fun parseLiteral(): Expression {
-        // literal => NUMBER | ident | string
+        // literal => number | ident | string
 
         val token = this.peek()
         check(token != null) {
@@ -31,7 +31,7 @@ class Parser(
         }
 
         when (token.value) {
-            is TokenValue.Number -> {
+            is TokenValue.NumberLiteral -> {
                 this.idx += 1
                 return Expression.NumberLiteral(token.value.value)
             }
@@ -41,7 +41,7 @@ class Parser(
                 return Expression.Ident(token.value.name)
             }
 
-            is TokenValue.String -> {
+            is TokenValue.StringLiteral -> {
                 this.idx += 1
                 return Expression.StringLiteral(token.value.value)
             }
@@ -109,27 +109,52 @@ class Parser(
 
     fun parseIdentStatement(ident: TokenValue.Ident): Statement {
         // identStatement => variableDeclaration | variableAssignment
-        // variableDeclaration => ident ':=' expression | ident
+        // variableDeclaration => ident ':=' expression | ident ':' type | ident ':' type '=' expression
         // variableAssignment => ident '=' expression
 
         this.idx += 1
         val next = this.peek() ?: throw UnexpectedEndOfInputError
 
-        when (next.value) {
-            is TokenValue.Semicolon -> {
-                return Statement.VariableDeclaration(
-                    name = ident.name,
-                    value = null,
-                )
-            }
-
-            is TokenValue.ColonEqual -> {
+        return when (next.value) {
+            is TokenValue.Colon -> {
                 this.idx += 1
-                val value = this.parseExpression()
-                return Statement.VariableDeclaration(
-                    name = ident.name,
-                    value = value,
-                )
+                val type = this.peek() ?: throw UnexpectedEndOfInputError
+
+                when (type.value) {
+                    is TokenValue.Equal -> {
+                        this.idx += 1
+                        val value = this.parseExpression()
+                        Statement.VariableDeclaration(
+                            name = ident.name,
+                            type = null,
+                            value = value,
+                        )
+                    }
+
+                    is TokenValue.Type -> {
+                        this.idx += 1
+                        val variableType = type.value.type
+
+                        val equal = this.peek() ?: throw UnexpectedEndOfInputError
+                        if (equal.value == TokenValue.Equal) {
+                            this.idx += 1
+                            val value = this.parseExpression()
+                            Statement.VariableDeclaration(
+                                name = ident.name,
+                                type = variableType,
+                                value = value,
+                            )
+                        } else {
+                            Statement.VariableDeclaration(
+                                name = ident.name,
+                                type = variableType,
+                                value = null,
+                            )
+                        }
+                    }
+
+                    else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}")
+                }
             }
 
             is TokenValue.Equal -> {

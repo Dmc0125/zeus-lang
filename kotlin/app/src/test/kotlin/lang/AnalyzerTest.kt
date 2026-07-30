@@ -1,8 +1,6 @@
 package lang
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.*
 
 class AnalyzerTest {
     @Test
@@ -72,8 +70,33 @@ class AnalyzerTest {
     @Test
     fun `throws at already defined variable`() {
         val statements = listOf(
-            Statement.VariableDeclaration("foo", Expression.NumberLiteral(123.0)),
-            Statement.VariableDeclaration("foo", Expression.NumberLiteral(345.0)),
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(123.0)),
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(345.0)),
+        )
+        val analyzer = Analyzer()
+
+        assertFailsWith(RuntimeException::class) {
+            analyzer.analyzeProgram(statements)
+        }
+    }
+
+    @Test
+    fun `throws at variable declaration type mismatch`() {
+        val statements = listOf(
+            Statement.VariableDeclaration("foo", VariableType.String, Expression.NumberLiteral(123.0)),
+        )
+        val analyzer = Analyzer()
+
+        assertFailsWith(RuntimeException::class) {
+            analyzer.analyzeProgram(statements)
+        }
+    }
+
+    @Test
+    fun `throws at variable assignment type mismatch`() {
+        val statements = listOf(
+            Statement.VariableDeclaration("foo", VariableType.String, null),
+            Statement.VariableAssignment("foo", Expression.NumberLiteral(345.0)),
         )
         val analyzer = Analyzer()
 

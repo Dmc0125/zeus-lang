@@ -1,5 +1,7 @@
-x := 5 + 10;
-y := x * x;
-x = y + 5;
+x: string;
+
+y := 5;
+x = y + 10;
+
 println x;
-print y;
+println y;

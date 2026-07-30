@@ -40,7 +40,7 @@ class BufferedPrinter(
 }
 
 sealed interface VariableValue {
-    data class Double(val value: kotlin.Double) : VariableValue {
+    data class Number(val value: kotlin.Double) : VariableValue {
         override fun toString(): kotlin.String = this.value.toString()
     }
 
@@ -55,50 +55,34 @@ class Interpreter(
     var variables: MutableMap<String, VariableValue> = mutableMapOf()
 
     fun interpretUnary(expression: Expression.Unary): VariableValue {
-        val value = interpretExpression(expression.operand)
-        return when (value) {
-            is VariableValue.Double -> {
-                when (expression.operator) {
-                    TokenValue.Minus -> VariableValue.Double(-value.value)
-                    TokenValue.Plus -> value
-                    else -> throw RuntimeException("Invalid unary operator: ${expression.operator}")
-                }
-            }
-
-            else -> throw RuntimeException("Invalid operand type: $value; unary requires Double")
+        val value = interpretExpression(expression.operand) as VariableValue.Number
+        return when (expression.operator) {
+            is TokenValue.Minus -> VariableValue.Number(-value.value)
+            else -> value
         }
     }
 
     fun interpretBinary(expression: Expression.Binary): VariableValue {
-        val left = interpretExpression(expression.left)
-        check(left is VariableValue.Double) { throw RuntimeException("Expected a double value, got $left") }
-        val right = interpretExpression(expression.right)
-        check(right is VariableValue.Double) { throw RuntimeException("Expected a double value, got $right") }
+        val left = interpretExpression(expression.left) as VariableValue.Number
+        val right = interpretExpression(expression.right) as VariableValue.Number
 
         return when (expression.operator) {
-            TokenValue.Plus -> VariableValue.Double(left.value + right.value)
-            TokenValue.Minus -> VariableValue.Double(left.value - right.value)
-            TokenValue.Star -> VariableValue.Double(left.value * right.value)
+            TokenValue.Plus -> VariableValue.Number(left.value + right.value)
+            TokenValue.Minus -> VariableValue.Number(left.value - right.value)
+            TokenValue.Star -> VariableValue.Number(left.value * right.value)
             TokenValue.Slash -> {
                 check(right.value != 0.0) { throw RuntimeException("Division by zero") }
-                VariableValue.Double(left.value / right.value)
+                VariableValue.Number(left.value / right.value)
             }
 
-            else -> throw RuntimeException("Invalid operator: ${expression.operator}")
+            else -> throw RuntimeException("Unreachable")
         }
     }
 
     fun interpretExpression(expression: Expression): VariableValue {
         return when (expression) {
-            is Expression.Ident -> {
-                val value = variables[expression.name]
-                check(value != null) {
-                    throw RuntimeException("Undefined variable: ${expression.name}")
-                }
-                value
-            }
-
-            is Expression.NumberLiteral -> VariableValue.Double(expression.value)
+            is Expression.Ident -> variables[expression.name]!!
+            is Expression.NumberLiteral -> VariableValue.Number(expression.value)
             is Expression.StringLiteral -> VariableValue.String(expression.value)
             is Expression.Unary -> this.interpretUnary(expression)
             is Expression.Binary -> this.interpretBinary(expression)
@@ -110,18 +94,14 @@ class Interpreter(
             when (statement) {
                 is Statement.VariableDeclaration -> {
                     if (statement.value == null) {
-                        variables[statement.name] = VariableValue.Double(0.0)
+                        variables[statement.name] = VariableValue.Number(0.0)
                     } else {
                         variables[statement.name] = interpretExpression(statement.value)
                     }
                 }
 
                 is Statement.VariableAssignment -> {
-                    if (variables.containsKey(statement.name)) {
-                        variables[statement.name] = interpretExpression(statement.value)
-                    } else {
-                        throw IllegalArgumentException("variable ${statement.name} not declared")
-                    }
+                    variables[statement.name] = interpretExpression(statement.value)
                 }
 
                 is Statement.Print -> {

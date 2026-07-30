@@ -9,6 +9,7 @@ fun main(args: Array<String>) {
         // repl
 
         val printer = BufferedPrinter()
+        val analyzer = Analyzer()
         val interpreter = Interpreter(printer)
 
         println("Welcome to the REPL. Type 'exit' to quit")
@@ -23,6 +24,7 @@ fun main(args: Array<String>) {
             val parser = Parser(tokens)
             val statements = parser.parseProgram()
 
+            analyzer.analyzeProgram(statements)
             interpreter.interpretProgram(statements)
 
             val flushed = printer.sb.length > 0
@@ -49,6 +51,9 @@ fun main(args: Array<String>) {
         val tokens = tokenizerRun(text)
         val parser = Parser(tokens)
         val statements = parser.parseProgram()
+
+        val analyzer = Analyzer()
+        analyzer.analyzeProgram(statements)
 
         val printer = BufferedPrinter()
         val interpreter = Interpreter(printer)

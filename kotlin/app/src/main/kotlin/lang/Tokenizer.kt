@@ -1,22 +1,28 @@
 package lang
 
+sealed interface VariableType {
+    data object Number : VariableType
+    data object String : VariableType
+}
+
 sealed interface TokenValue {
     // literal
-    data class Number(val value: Double) : TokenValue
+    data class NumberLiteral(val value: Double) : TokenValue
+    data class StringLiteral(val value: kotlin.String) : TokenValue
     data class Ident(val name: kotlin.String) : TokenValue
-    data class String(val value: kotlin.String) : TokenValue
 
     // operator
     data object Plus : TokenValue
     data object Minus : TokenValue
     data object Star : TokenValue
     data object Slash : TokenValue
-    data object ColonEqual : TokenValue
+    data object Colon : TokenValue
     data object Semicolon : TokenValue
     data object Equal : TokenValue
 
     // keywords
     data class Print(val ln: Boolean) : TokenValue
+    data class Type(val type: VariableType) : TokenValue
 }
 
 data class Token(
@@ -69,22 +75,7 @@ fun tokenizerRun(input: String): List<Token> {
             '/' -> tokens.add(Token(TokenValue.Slash, line, col))
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
             '=' -> tokens.add(Token(TokenValue.Equal, line, col))
-
-            // multichar
-            ':' -> {
-                idx += 1
-
-                val next = peek()
-                if (next == '=') {
-                    tokens.add(Token(TokenValue.ColonEqual, line, col))
-                    col += 2
-                    idx += 1
-                } else {
-                    // Colon
-                    col += 1
-                }
-                continue
-            }
+            ':' -> tokens.add(Token(TokenValue.Colon, line, col))
 
             '"' -> {
                 idx += 1
@@ -109,7 +100,7 @@ fun tokenizerRun(input: String): List<Token> {
                 idx += 1
                 col += 1
 
-                tokens.add(Token(TokenValue.String(value), line, startCol))
+                tokens.add(Token(TokenValue.StringLiteral(value), line, startCol))
             }
 
             else -> {
@@ -128,7 +119,7 @@ fun tokenizerRun(input: String): List<Token> {
                     val valueStr = input.substring(startIdx, idx)
                     try {
                         val value = valueStr.toDouble()
-                        tokens.add(Token(TokenValue.Number(value), line, startCol))
+                        tokens.add(Token(TokenValue.NumberLiteral(value), line, startCol))
                     } catch (e: NumberFormatException) {
                         throw SyntaxError(line, col, "Invalid number: ${valueStr}")
                     }
@@ -152,6 +143,8 @@ fun tokenizerRun(input: String): List<Token> {
                     when (value) {
                         "print" -> tokens.add(Token(TokenValue.Print(false), line, startCol))
                         "println" -> tokens.add(Token(TokenValue.Print(true), line, startCol))
+                        "number" -> tokens.add(Token(TokenValue.Type(VariableType.Number), line, startCol))
+                        "string" -> tokens.add(Token(TokenValue.Type(VariableType.String), line, startCol))
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }
 

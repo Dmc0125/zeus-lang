@@ -1,17 +1,12 @@
 package lang
 
-sealed interface VariableType {
-    data object Double : VariableType
-    data object String : VariableType
-}
-
 class Analyzer {
     val variables: MutableMap<String, VariableType> = mutableMapOf()
 
     fun analyzeUnary(expression: Expression.Unary): VariableType {
         val type = this.analyzeExpression(expression.operand)
 
-        if (type != VariableType.Double) {
+        if (type != VariableType.Number) {
             throw RuntimeException("Invalid operand type: $type; unary requires Double")
         }
 
@@ -25,13 +20,13 @@ class Analyzer {
         val leftType = this.analyzeExpression(expression.left)
         val rightType = this.analyzeExpression(expression.right)
 
-        if (leftType != VariableType.Double || rightType != VariableType.Double) {
+        if (leftType != VariableType.Number || rightType != VariableType.Number) {
             throw RuntimeException("Invalid operand types: $leftType, $rightType; binary requires both Double")
         }
 
         return when (expression.operator) {
             is TokenValue.Minus, is TokenValue.Plus,
-            is TokenValue.Star, is TokenValue.Slash -> VariableType.Double
+            is TokenValue.Star, is TokenValue.Slash -> VariableType.Number
 
             else -> throw RuntimeException("Invalid operator: ${expression.operator}; binary requires \"-\", \"+\", \"*\", or \"/\"")
         }
@@ -44,10 +39,10 @@ class Analyzer {
                 check(type != null) {
                     throw RuntimeException("Undefined variable: ${expression.name}")
                 }
-                type!!
+                type
             }
 
-            is Expression.NumberLiteral -> VariableType.Double
+            is Expression.NumberLiteral -> VariableType.Number
             is Expression.StringLiteral -> VariableType.String
             is Expression.Unary -> this.analyzeUnary(expression)
             is Expression.Binary -> this.analyzeBinary(expression)
@@ -63,11 +58,19 @@ class Analyzer {
                     }
 
                     if (statement.value == null) {
-                        // TODO: Introduce types
-                        throw RuntimeException("unimplemented")
+                        check(statement.type != null) {
+                            throw RuntimeException("Type not specified for variable: ${statement.name}")
+                        }
+                        this.variables[statement.name] = statement.type
+                    } else {
+                        val valueType = this.analyzeExpression(statement.value)
+                        if (statement.type != null) {
+                            check(statement.type == valueType) {
+                                throw RuntimeException("Type mismatch: ${statement.name}")
+                            }
+                        }
+                        this.variables[statement.name] = valueType
                     }
-
-                    this.variables[statement.name] = this.analyzeExpression(statement.value)
                 }
 
                 is Statement.VariableAssignment -> {
