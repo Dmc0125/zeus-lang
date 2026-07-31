@@ -5,7 +5,7 @@ import kotlin.test.*
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
-        val input = "+-* / :=;print println true false bool! (){}"
+        val input = "+-* / :=;print println true false bool! (){}if else"
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -26,6 +26,8 @@ class TokenizerTest {
             Token(TokenValue.RParen, 1, 42),
             Token(TokenValue.LBrace, 1, 43),
             Token(TokenValue.RBrace, 1, 44),
+            Token(TokenValue.If, 1, 45),
+            Token(TokenValue.Else, 1, 48),
         )
 
         assertTrue(tokens.size == expected.size)
@@ -59,6 +61,23 @@ class TokenizerTest {
         )
 
         assertTrue(tokens.size == expected.size)
+        for (i in tokens.indices) {
+            assertEquals(expected[i], tokens[i])
+        }
+    }
+
+    @Test
+    fun `tokenizes println with string`() {
+        val input = "println \"hello\";"
+        val tokens = tokenizerRun(input)
+
+        val expected = listOf(
+            Token(TokenValue.Print(true), 1, 1),
+            Token(TokenValue.StringLiteral("hello"), 1, 9),
+            Token(TokenValue.Semicolon, 1, 16)
+        )
+
+        assertEquals(expected.size, tokens.size)
         for (i in tokens.indices) {
             assertEquals(expected[i], tokens[i])
         }

@@ -2,10 +2,7 @@ package lang
 
 import java.io.PrintStream
 
-class BufferedPrinter(
-    val capacity: Int = 4096,
-    val output: PrintStream = System.out
-) {
+class BufferedPrinter(val capacity: Int = 4096, val output: PrintStream = System.out) {
     val sb = StringBuilder()
     var flushed = false
 
@@ -149,6 +146,20 @@ class Interpreter(
                     this.interpretStatement(statement)
                 }
                 this.scopes.removeAt(this.scopes.size - 1)
+            }
+
+            is Statement.If -> {
+                var condition = this.interpretExpression(statement.condition)
+                assert(condition is VariableValue.Bool) {
+                    throw RuntimeException("Condition must be a boolean")
+                }
+                condition = condition as VariableValue.Bool
+
+                if (condition.value && statement.thenBranch != null) {
+                    this.interpretStatement(statement.thenBranch)
+                } else if (!condition.value && statement.elseBranch != null) {
+                    this.interpretStatement(statement.elseBranch)
+                }
             }
         }
     }

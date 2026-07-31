@@ -392,4 +392,102 @@ class ParserTest {
         assertEquals(1, stmt.statements.size)
         assertIs<Statement.Print>(stmt.statements[0])
     }
+
+    @Test
+    fun `parses if statement`() {
+        val tokens = listOf(
+            Token(TokenValue.If, 1, 1),
+            Token(TokenValue.BoolLiteral(true), 1, 2),
+            Token(TokenValue.LBrace, 1, 4),
+            Token(TokenValue.Print(false), 1, 5),
+            Token(TokenValue.NumberLiteral(123.45), 1, 10),
+            Token(TokenValue.Semicolon, 1, 15),
+            Token(TokenValue.RBrace, 1, 1),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertIs<Statement.If>(stmt)
+        assertIs<Statement.Block>(stmt.thenBranch)
+
+        assertIs<Expression.BoolLiteral>(stmt.condition)
+        assertTrue(stmt.condition.value)
+
+        assertEquals(1, stmt.thenBranch.statements.size)
+        val print = stmt.thenBranch.statements[0]
+        assertIs<Statement.Print>(print)
+        assertIs<Expression.NumberLiteral>(print.expression)
+        assertEquals(123.45, print.expression.value)
+    }
+
+    @Test
+    fun `parses if statement with else branch`() {
+        val tokens = listOf(
+            Token(TokenValue.If, 1, 1),
+            Token(TokenValue.BoolLiteral(true), 1, 2),
+            Token(TokenValue.LBrace, 1, 4),
+            Token(TokenValue.Print(false), 1, 5),
+            Token(TokenValue.NumberLiteral(123.45), 1, 10),
+            Token(TokenValue.Semicolon, 1, 15),
+            Token(TokenValue.RBrace, 1, 1),
+            Token(TokenValue.Else, 1, 2),
+            Token(TokenValue.LBrace, 1, 3),
+            Token(TokenValue.Print(true), 1, 4),
+            Token(TokenValue.NumberLiteral(67.89), 1, 9),
+            Token(TokenValue.Semicolon, 1, 14),
+            Token(TokenValue.RBrace, 1, 2),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertIs<Statement.If>(stmt)
+        assertIs<Statement.Block>(stmt.thenBranch)
+        assertIs<Statement.Block>(stmt.elseBranch)
+
+        // else
+        assertEquals(1, stmt.elseBranch.statements.size)
+        val elsePrint = stmt.elseBranch.statements[0]
+        assertIs<Statement.Print>(elsePrint)
+        assertIs<Expression.NumberLiteral>(elsePrint.expression)
+        assertEquals(67.89, elsePrint.expression.value)
+    }
+
+    @Test
+    fun `parses if statement with else if branch`() {
+        // if (true) { } else if (false) { print(true); }
+        val tokens = listOf(
+            Token(TokenValue.If, 1, 1),
+            Token(TokenValue.BoolLiteral(true), 1, 2),
+            Token(TokenValue.LBrace, 1, 4),
+            Token(TokenValue.RBrace, 1, 1),
+            Token(TokenValue.Else, 1, 2),
+            Token(TokenValue.If, 1, 1),
+            Token(TokenValue.BoolLiteral(false), 1, 2),
+            Token(TokenValue.LBrace, 1, 4),
+            Token(TokenValue.Print(true), 1, 5),
+            Token(TokenValue.NumberLiteral(67.89), 1, 10),
+            Token(TokenValue.Semicolon, 1, 15),
+            Token(TokenValue.RBrace, 1, 1),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertIs<Statement.If>(stmt)
+        assertEquals(null, stmt.thenBranch)
+        assertIs<Statement.If>(stmt.elseBranch)
+
+        // else if (false) { print(true); }
+        val elseIf = stmt.elseBranch
+        val elseIfBlock = stmt.elseBranch.thenBranch
+        assertNotNull(elseIfBlock)
+        assertEquals(1, elseIfBlock.statements.size)
+
+        val elseIfPrint = elseIfBlock.statements[0]
+        assertIs<Statement.Print>(elseIfPrint)
+        assertIs<Expression.NumberLiteral>(elseIfPrint.expression)
+        assertEquals(67.89, elseIfPrint.expression.value)
+    }
 }

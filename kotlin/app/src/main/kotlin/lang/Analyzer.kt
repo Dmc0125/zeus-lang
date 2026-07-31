@@ -14,14 +14,20 @@ class Analyzer {
             VariableType.Number -> {
                 when (expression.operator) {
                     is TokenValue.Minus, is TokenValue.Plus -> type
-                    else -> throw RuntimeException("Invalid operator: ${expression.operator}; unary requires \"-\" or \"+\"")
+                    else ->
+                        throw RuntimeException(
+                            "Invalid operator: ${expression.operator}; unary requires \"-\" or \"+\""
+                        )
                 }
             }
 
             VariableType.Bool -> {
                 when (expression.operator) {
                     is TokenValue.Excl -> type
-                    else -> throw RuntimeException("Invalid operator: ${expression.operator}; unary requires \"!\"")
+                    else ->
+                        throw RuntimeException(
+                            "Invalid operator: ${expression.operator}; unary requires \"!\""
+                        )
                 }
             }
 
@@ -34,14 +40,19 @@ class Analyzer {
         val rightType = this.analyzeExpression(expression.right)
 
         if (leftType != VariableType.Number || rightType != VariableType.Number) {
-            throw RuntimeException("Invalid operand types: $leftType, $rightType; binary requires both Double")
+            throw RuntimeException(
+                "Invalid operand types: $leftType, $rightType; binary requires both Double"
+            )
         }
 
         return when (expression.operator) {
-            is TokenValue.Minus, is TokenValue.Plus,
-            is TokenValue.Star, is TokenValue.Slash -> VariableType.Number
+            is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Star, is TokenValue.Slash ->
+                VariableType.Number
 
-            else -> throw RuntimeException("Invalid operator: ${expression.operator}; binary requires \"-\", \"+\", \"*\", or \"/\"")
+            else ->
+                throw RuntimeException(
+                    "Invalid operator: ${expression.operator}; binary requires \"-\", \"+\", \"*\", or \"/\""
+                )
         }
     }
 
@@ -101,19 +112,30 @@ class Analyzer {
                         found = true
                     }
                 }
-                check(found) {
-                    throw RuntimeException("Undefined variablel: ${statement.name}")
-                }
+                check(found) { throw RuntimeException("Undefined variablel: ${statement.name}") }
             }
 
             is Statement.Print -> this.analyzeExpression(statement.expression)
-
             is Statement.Block -> {
                 this.stack.add(AnalyzerScope())
                 for (statement in statement.statements) {
                     this.analyzeStatement(statement)
                 }
                 this.stack.removeAt(this.stack.size - 1)
+            }
+
+            is Statement.If -> {
+                val conditionType = this.analyzeExpression(statement.condition)
+                check(conditionType == VariableType.Bool) {
+                    throw RuntimeException("Condition must be a boolean")
+                }
+
+                if (statement.thenBranch != null) {
+                    this.analyzeStatement(statement.thenBranch)
+                }
+                if (statement.elseBranch != null) {
+                    this.analyzeStatement(statement.elseBranch)
+                }
             }
         }
     }

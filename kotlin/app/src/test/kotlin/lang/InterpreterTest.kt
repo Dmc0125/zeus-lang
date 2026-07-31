@@ -112,4 +112,74 @@ class InterpreterTest {
         val globalScope = interpreter.scopes[0]
         assertEquals(0, globalScope.size)
     }
+
+    @Test
+    fun `interprets if statement`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
+            Statement.If(
+                Expression.BoolLiteral(true),
+                Statement.Block(
+                    listOf(
+                        Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
+                    ),
+                ),
+                null
+            )
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals(1, interpreter.scopes.size)
+        assertNotNull(interpreter.scopes[0]["foo"])
+        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+    }
+
+    @Test
+    fun `interprets if statement with else branch`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
+            Statement.If(
+                Expression.BoolLiteral(false),
+                null,
+                Statement.Block(
+                    listOf(
+                        Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
+                    ),
+                ),
+            )
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals(1, interpreter.scopes.size)
+        assertNotNull(interpreter.scopes[0]["foo"])
+        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+    }
+
+    @Test
+    fun `interprets if statement with else if branch`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
+            Statement.If(
+                Expression.BoolLiteral(false),
+                null,
+                Statement.If(
+                    Expression.BoolLiteral(true),
+                    Statement.Block(
+                        listOf(
+                            Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
+                        ),
+                    ),
+                    null,
+                )
+            )
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals(1, interpreter.scopes.size)
+        assertNotNull(interpreter.scopes[0]["foo"])
+        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+    }
 }

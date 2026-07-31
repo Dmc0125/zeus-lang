@@ -32,6 +32,8 @@ sealed interface TokenValue {
     // keywords
     data class Print(val ln: Boolean) : TokenValue
     data class Type(val type: VariableType) : TokenValue
+    data object If : TokenValue
+    data object Else : TokenValue
 }
 
 data class Token(
@@ -115,6 +117,7 @@ fun tokenizerRun(input: String): List<Token> {
                 col += 1
 
                 tokens.add(Token(TokenValue.StringLiteral(value), line, startCol))
+                continue
             }
 
             else -> {
@@ -164,6 +167,9 @@ fun tokenizerRun(input: String): List<Token> {
 
                         "true" -> tokens.add(Token(TokenValue.BoolLiteral(true), line, startCol))
                         "false" -> tokens.add(Token(TokenValue.BoolLiteral(false), line, startCol))
+
+                        "if" -> tokens.add(Token(TokenValue.If, line, startCol))
+                        "else" -> tokens.add(Token(TokenValue.Else, line, startCol))
 
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }

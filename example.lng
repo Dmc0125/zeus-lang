@@ -3,10 +3,34 @@ x: number;
 y := 5;
 x = y + 10;
 
-println x;
+println "";
 println y;
 
 t: bool;
 t = !true;
 
 println t;
+
+println "before true";
+
+if true {
+    println true;
+}
+
+println "before false";
+
+if false {
+    println false;
+}
+
+println "after ifs";
+
+if false {
+} else if true {
+    println "else if true";
+}
+
+if false {
+} else {
+    println "else";
+}

@@ -14,6 +14,11 @@ sealed interface Statement {
     data class VariableAssignment(val name: String, val value: Expression) : Statement
     data class Print(val expression: Expression, val ln: Boolean) : Statement
     data class Block(val statements: List<Statement>) : Statement
+    data class If(
+        val condition: Expression,
+        val thenBranch: Statement.Block?,
+        val elseBranch: Statement?,
+    ) : Statement
 }
 
 class Parser(
@@ -207,7 +212,11 @@ class Parser(
         }
     }
 
-    fun parseBlock(): Statement? {
+    fun parseBlockStatement(): Statement.Block? {
+        // block => '{' statement* '}'
+
+        this.idx += 1 // skip '{'
+
         val statements = mutableListOf<Statement>()
 
         while (true) {
@@ -223,12 +232,47 @@ class Parser(
             }
         }
 
+        this.idx += 1 // skip '}'
+
         if (statements.isEmpty()) {
             return null
         }
 
-        this.idx += 1 // skip '}'
         return Statement.Block(statements)
+    }
+
+    fun parseIfStatement(): Statement {
+        // if => 'if' expression '{' statement* '}' ('else' '{' statement* '}')?
+
+        this.idx += 1 // skip 'if'
+
+        val cond = this.parseExpression()
+
+        val lBrace = this.peek() ?: throw UnexpectedEndOfInputError
+        check(lBrace.value == TokenValue.LBrace) {
+            throw UnexpectedTokenError(lBrace.line, lBrace.col, "${lBrace.value}", "LBrace")
+        }
+
+        val thenBranch = this.parseBlockStatement()
+
+        val elseToken = this.peek()
+        var elseBranch: Statement? = null
+
+        if (elseToken?.value == TokenValue.Else) {
+            this.idx += 1
+            val ifToken = this.peek() ?: throw UnexpectedEndOfInputError
+            elseBranch = when (ifToken.value) {
+                is TokenValue.If -> this.parseIfStatement()
+                is TokenValue.LBrace -> this.parseBlockStatement()
+                else -> throw UnexpectedTokenError(ifToken.line, ifToken.col, "${ifToken.value}", "LBrace or If")
+            }
+        }
+
+        return Statement.If(
+            condition = cond,
+            thenBranch = thenBranch,
+            elseBranch = elseBranch,
+        )
     }
 
     fun parseStatement(): Statement? {
@@ -237,22 +281,16 @@ class Parser(
         val next = this.peek()
         check(next != null) { throw UnexpectedEndOfInputError }
 
-        var requiresSemicolon = true
-
-        val statement = when (next.value) {
-            is TokenValue.Ident -> this.parseIdentStatement(next.value)
+        val (statement, requiresSemicolon) = when (next.value) {
+            is TokenValue.Ident -> Pair(this.parseIdentStatement(next.value), true)
             is TokenValue.Print -> {
                 // print => 'print' expression
                 this.idx += 1
-                Statement.Print(this.parseExpression(), next.value.ln)
+                Pair(Statement.Print(this.parseExpression(), next.value.ln), true)
             }
 
-            is TokenValue.LBrace -> {
-                // block => '{' statement* '}'
-                this.idx += 1
-                requiresSemicolon = false
-                this.parseBlock()
-            }
+            is TokenValue.LBrace -> Pair(this.parseBlockStatement(), false)
+            is TokenValue.If -> Pair(this.parseIfStatement(), false)
 
             else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "identifier or print")
         }
