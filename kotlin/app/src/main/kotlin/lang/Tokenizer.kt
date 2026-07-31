@@ -26,6 +26,9 @@ sealed interface TokenValue {
     data object LParen : TokenValue
     data object RParen : TokenValue
 
+    data object LBrace : TokenValue
+    data object RBrace : TokenValue
+
     // keywords
     data class Print(val ln: Boolean) : TokenValue
     data class Type(val type: VariableType) : TokenValue
@@ -85,6 +88,8 @@ fun tokenizerRun(input: String): List<Token> {
             '!' -> tokens.add(Token(TokenValue.Excl, line, col))
             '(' -> tokens.add(Token(TokenValue.LParen, line, col))
             ')' -> tokens.add(Token(TokenValue.RParen, line, col))
+            '{' -> tokens.add(Token(TokenValue.LBrace, line, col))
+            '}' -> tokens.add(Token(TokenValue.RBrace, line, col))
 
             '"' -> {
                 idx += 1

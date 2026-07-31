@@ -5,7 +5,7 @@ import kotlin.test.*
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
-        val input = "+-* / :=;print println true false bool! ()"
+        val input = "+-* / :=;print println true false bool! (){}"
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -24,6 +24,8 @@ class TokenizerTest {
             Token(TokenValue.Excl, 1, 39),
             Token(TokenValue.LParen, 1, 41),
             Token(TokenValue.RParen, 1, 42),
+            Token(TokenValue.LBrace, 1, 43),
+            Token(TokenValue.RBrace, 1, 44),
         )
 
         assertTrue(tokens.size == expected.size)

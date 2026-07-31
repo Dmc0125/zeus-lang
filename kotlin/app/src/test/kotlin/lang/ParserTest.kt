@@ -374,4 +374,22 @@ class ParserTest {
         assertEquals(123.45, stmt.expression.value)
         assertFalse(stmt.ln)
     }
+
+    @Test
+    fun `parses block`() {
+        val tokens = listOf(
+            Token(TokenValue.LBrace, 1, 1),
+            Token(TokenValue.Print(false), 1, 2),
+            Token(TokenValue.NumberLiteral(123.45), 1, 7),
+            Token(TokenValue.Semicolon, 1, 12),
+            Token(TokenValue.RBrace, 1, 1),
+        )
+
+        val parser = Parser(tokens)
+        val stmt = parser.parseStatement()
+
+        assertIs<Statement.Block>(stmt)
+        assertEquals(1, stmt.statements.size)
+        assertIs<Statement.Print>(stmt.statements[0])
+    }
 }

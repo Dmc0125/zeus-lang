@@ -56,7 +56,7 @@ sealed interface VariableValue {
 class Interpreter(
     val printer: BufferedPrinter? = null,
 ) {
-    var variables: MutableMap<String, VariableValue> = mutableMapOf()
+    val scopes: MutableList<MutableMap<String, VariableValue>> = mutableListOf(mutableMapOf())
 
     fun interpretUnary(expression: Expression.Unary): VariableValue {
         val value = interpretExpression(expression.operand)
@@ -94,7 +94,15 @@ class Interpreter(
 
     fun interpretExpression(expression: Expression): VariableValue {
         return when (expression) {
-            is Expression.Ident -> variables[expression.name]!!
+            is Expression.Ident -> {
+                for (scope in this.scopes) {
+                    if (scope.contains(expression.name)) {
+                        return scope[expression.name]!!
+                    }
+                }
+                throw RuntimeException("Unreachable")
+            }
+
             is Expression.NumberLiteral -> VariableValue.Number(expression.value)
             is Expression.StringLiteral -> VariableValue.String(expression.value)
             is Expression.BoolLiteral -> VariableValue.Bool(expression.value)
@@ -103,32 +111,51 @@ class Interpreter(
         }
     }
 
-    fun interpretProgram(statements: List<Statement>) {
-        for (statement in statements) {
-            when (statement) {
-                is Statement.VariableDeclaration -> {
-                    if (statement.value == null) {
-                        variables[statement.name] = VariableValue.Number(0.0)
-                    } else {
-                        variables[statement.name] = interpretExpression(statement.value)
+    fun interpretStatement(statement: Statement) {
+        when (statement) {
+            is Statement.VariableDeclaration -> {
+                val scope = this.scopes[this.scopes.size - 1]
+                if (statement.value == null) {
+                    scope[statement.name] = VariableValue.Number(0.0)
+                } else {
+                    scope[statement.name] = interpretExpression(statement.value)
+                }
+            }
+
+            is Statement.VariableAssignment -> {
+                for (scope in this.scopes) {
+                    if (scope.contains(statement.name)) {
+                        scope[statement.name] = interpretExpression(statement.value)
+                        return
                     }
                 }
+                throw RuntimeException("Ureachable")
+            }
 
-                is Statement.VariableAssignment -> {
-                    variables[statement.name] = interpretExpression(statement.value)
-                }
-
-                is Statement.Print -> {
-                    if (this.printer != null) {
-                        val text = interpretExpression(statement.expression).toString()
-                        if (statement.ln) {
-                            this.printer.println(text)
-                        } else {
-                            this.printer.print(text)
-                        }
+            is Statement.Print -> {
+                if (this.printer != null) {
+                    val text = interpretExpression(statement.expression).toString()
+                    if (statement.ln) {
+                        this.printer.println(text)
+                    } else {
+                        this.printer.print(text)
                     }
                 }
             }
+
+            is Statement.Block -> {
+                this.scopes.add(mutableMapOf())
+                for (statement in statement.statements) {
+                    this.interpretStatement(statement)
+                }
+                this.scopes.removeAt(this.scopes.size - 1)
+            }
+        }
+    }
+
+    fun interpretProgram(statements: List<Statement>) {
+        for (statement in statements) {
+            this.interpretStatement(statement)
         }
     }
 }

@@ -134,4 +134,18 @@ class AnalyzerTest {
             analyzer.analyzeProgram(statements)
         }
     }
+
+    @Test
+    fun `does not throw at valid variable assignment in block`() {
+        val statements = listOf(
+            Statement.VariableDeclaration("foo", VariableType.Number, null),
+            Statement.Block(
+                listOf(
+                    Statement.VariableAssignment("foo", Expression.NumberLiteral(345.0)),
+                )
+            )
+        )
+        val analyzer = Analyzer()
+        analyzer.analyzeProgram(statements)
+    }
 }

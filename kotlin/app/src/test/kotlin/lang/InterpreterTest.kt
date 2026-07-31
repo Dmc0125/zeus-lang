@@ -51,7 +51,7 @@ class InterpreterTest {
         val stmt = Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))
         interpreter.interpretProgram(listOf(stmt))
 
-        assertEquals(VariableValue.Number(12.0), interpreter.variables["foo"])
+        assertEquals(VariableValue.Number(12.0), interpreter.scopes[0]["foo"])
     }
 
     @Test
@@ -77,6 +77,39 @@ class InterpreterTest {
         )
         interpreter.interpretProgram(stmt)
 
-        assertEquals(VariableValue.Number(22.0), interpreter.variables["foo"])
+        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+    }
+
+    @Test
+    fun `interprets block`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
+            Statement.Block(
+                listOf(
+                    Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
+                )
+            )
+        )
+        interpreter.interpretProgram(stmt)
+
+        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+    }
+
+    @Test
+    fun `disposes scope`() {
+        val interpreter = Interpreter()
+        val stmt = listOf(
+            Statement.Block(
+                listOf(
+                    Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))
+                )
+            )
+        )
+        interpreter.interpretProgram(stmt)
+        assertEquals(1, interpreter.scopes.size)
+
+        val globalScope = interpreter.scopes[0]
+        assertEquals(0, globalScope.size)
     }
 }

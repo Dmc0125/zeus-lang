@@ -13,6 +13,7 @@ sealed interface Statement {
     data class VariableDeclaration(val name: String, val type: VariableType?, val value: Expression?) : Statement
     data class VariableAssignment(val name: String, val value: Expression) : Statement
     data class Print(val expression: Expression, val ln: Boolean) : Statement
+    data class Block(val statements: List<Statement>) : Statement
 }
 
 class Parser(
@@ -109,7 +110,7 @@ class Parser(
             val operator = this.peek()
 
             when (operator?.value) {
-                is TokenValue.Plus, TokenValue.Minus -> {
+                is TokenValue.Plus, is TokenValue.Minus -> {
                     this.idx += 1
                     val right = this.parseGroup(this::parseTerm)
                     left = Expression.Binary(operator = operator.value, left = left, right = right)
@@ -206,11 +207,37 @@ class Parser(
         }
     }
 
-    fun parseStatement(): Statement {
+    fun parseBlock(): Statement? {
+        val statements = mutableListOf<Statement>()
+
+        while (true) {
+            val next = this.peek() ?: throw UnexpectedEndOfInputError
+
+            if (next.value == TokenValue.RBrace) {
+                break
+            }
+
+            val stmt = this.parseStatement()
+            if (stmt != null) {
+                statements.add(stmt)
+            }
+        }
+
+        if (statements.isEmpty()) {
+            return null
+        }
+
+        this.idx += 1 // skip '}'
+        return Statement.Block(statements)
+    }
+
+    fun parseStatement(): Statement? {
         // statement => variableDeclaration | print
 
         val next = this.peek()
         check(next != null) { throw UnexpectedEndOfInputError }
+
+        var requiresSemicolon = true
 
         val statement = when (next.value) {
             is TokenValue.Ident -> this.parseIdentStatement(next.value)
@@ -220,16 +247,25 @@ class Parser(
                 Statement.Print(this.parseExpression(), next.value.ln)
             }
 
+            is TokenValue.LBrace -> {
+                // block => '{' statement* '}'
+                this.idx += 1
+                requiresSemicolon = false
+                this.parseBlock()
+            }
+
             else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "identifier or print")
         }
 
-        val semicolon = this.peek()
-        check(semicolon != null) { throw UnexpectedEndOfInputError }
-        check(semicolon.value is TokenValue.Semicolon) {
-            // TODO: tokenValue.toString()
-            throw UnexpectedTokenError(semicolon.line, semicolon.col, "${semicolon.value}", ";")
+        if (requiresSemicolon) {
+            val semicolon = this.peek()
+            check(semicolon != null) { throw UnexpectedEndOfInputError }
+            check(semicolon.value is TokenValue.Semicolon) {
+                // TODO: tokenValue.toString()
+                throw UnexpectedTokenError(semicolon.line, semicolon.col, "${semicolon.value}", ";")
+            }
+            this.idx += 1
         }
-        this.idx += 1
 
         return statement
     }
@@ -238,7 +274,10 @@ class Parser(
         var statements: MutableList<Statement> = mutableListOf()
 
         while (this.idx < this.tokens.size) {
-            statements += this.parseStatement()
+            val stmt = this.parseStatement()
+            if (stmt != null) {
+                statements += stmt
+            }
         }
 
         return statements
