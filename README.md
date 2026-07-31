@@ -7,7 +7,7 @@ I wanted to build a toy language since I've never built one and it seems fun.
 - [x] numbers
 - [x] strings
   - so far pretty much useless
-- [ ] booleans
+- [x] booleans
 - [x] variables
   - declaration
   - assignment
@@ -16,14 +16,28 @@ I wanted to build a toy language since I've never built one and it seems fun.
 - [x] print
 - [ ] functions
 
-## MVP Spec
+## Grammar
 
 ```
-program := statement* EOF
+program := statement*
 
-statement := ( declaration | assignment | if | for | print | functionDeclaration ) ';'
+statement := (variableDeclaration ';')
+           | (variableAssignment ';')
+           | (print ';')
 
-declaration := ( identifier ':=' expression | identifier ) ';'
-assignment := identifier '=' expression ';'
+variableDeclaration := ident ':=' expression
+                     | ident ':' type
+                     | ident ':' type '=' expression
+variableAssignment  := ident '=' expression
 
+print := ('print'  | 'println') expression
+
+expression := '(' factor ')' | factor
+factor     := term (('+' | '-') term)*
+term       := unary (('*' | '/') unary)*
+unary      := (('+' | '-' | '!') unary) | literal
+literal    := number
+            | string
+            | bool
+            | ident
 ```

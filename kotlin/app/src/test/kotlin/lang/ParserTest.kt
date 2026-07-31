@@ -92,6 +92,8 @@ class ParserTest {
         val parser = Parser(tokens)
         val expr = parser.parseExpression()
 
+        println("expr = $expr")
+
         // (123.45 + 67.89) - 3
         assertIs<Expression.Binary>(expr)
         assertIs<TokenValue.Minus>(expr.operator)
@@ -187,6 +189,81 @@ class ParserTest {
             assertTrue(right.right is Expression.NumberLiteral)
             assertEquals(3.0, right.right.value)
         }
+    }
+
+    @Test
+    fun `parses group`() {
+        val tokens = listOf(
+            Token(TokenValue.LParen, 1, 1),
+            Token(TokenValue.NumberLiteral(123.45), 1, 2),
+            Token(TokenValue.RParen, 1, 6)
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.NumberLiteral>(expr)
+        assertEquals(123.45, expr.value)
+    }
+
+    @Test
+    fun `parses nested group`() {
+        val tokens = listOf(
+            Token(TokenValue.LParen, 1, 1),
+            Token(TokenValue.LParen, 1, 2),
+            Token(TokenValue.NumberLiteral(123.45), 1, 3),
+            Token(TokenValue.RParen, 1, 7),
+            Token(TokenValue.RParen, 1, 8),
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.NumberLiteral>(expr)
+        assertEquals(123.45, expr.value)
+    }
+
+    @Test
+    fun `parses group with correct precedence`() {
+        // 12 * (25 + 5 / 3) => 12 * (25 + (5 / 3))
+        val tokens = listOf(
+            Token(TokenValue.NumberLiteral(12.0), 1, 1),
+            Token(TokenValue.Star, 1, 3),
+            Token(TokenValue.LParen, 1, 4),
+            Token(TokenValue.NumberLiteral(25.0), 1, 5),
+            Token(TokenValue.Plus, 1, 6),
+            Token(TokenValue.NumberLiteral(5.0), 1, 8),
+            Token(TokenValue.Slash, 1, 9),
+            Token(TokenValue.NumberLiteral(3.0), 1, 11),
+            Token(TokenValue.RParen, 1, 12),
+        )
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        // 12 * (25 + 5 / 3)
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.Star, expr.operator)
+
+        assertIs<Expression.NumberLiteral>(expr.left)
+        assertEquals(12.0, expr.left.value)
+
+        // 25 + (5 / 3)
+        val right = expr.right
+        assertIs<Expression.Binary>(right)
+        assertEquals(TokenValue.Plus, right.operator)
+
+        assertIs<Expression.NumberLiteral>(right.left)
+        assertEquals(25.0, right.left.value)
+
+        // 5 / 3
+        var rightRight = right.right
+        assertIs<Expression.Binary>(rightRight)
+        assertEquals(TokenValue.Slash, rightRight.operator)
+
+        assertIs<Expression.NumberLiteral>(rightRight.left)
+        assertEquals(5.0, rightRight.left.value)
+        assertIs<Expression.NumberLiteral>(rightRight.right)
+        assertEquals(3.0, rightRight.right.value)
     }
 
     @Test

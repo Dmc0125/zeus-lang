@@ -69,9 +69,10 @@ class Parser(
         return when (token.value) {
             is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Excl -> {
                 this.idx += 1
+                val operand = this.parseGroup(this::parseUnary)
                 Expression.Unary(
                     operator = token.value,
-                    operand = this.parseUnary(),
+                    operand = operand,
                 )
             }
 
@@ -90,7 +91,7 @@ class Parser(
             when (operator?.value) {
                 is TokenValue.Star, TokenValue.Slash -> {
                     this.idx += 1
-                    val right = this.parseUnary()
+                    val right = this.parseGroup(this::parseUnary)
                     left = Expression.Binary(operator = operator.value, left = left, right = right)
                 }
 
@@ -99,7 +100,7 @@ class Parser(
         }
     }
 
-    fun parseExpression(): Expression {
+    fun parseFactor(): Expression {
         // expression => term (('+' | '-') term)*
 
         var left = this.parseTerm()
@@ -110,13 +111,36 @@ class Parser(
             when (operator?.value) {
                 is TokenValue.Plus, TokenValue.Minus -> {
                     this.idx += 1
-                    val right = this.parseTerm()
+                    val right = this.parseGroup(this::parseTerm)
                     left = Expression.Binary(operator = operator.value, left = left, right = right)
                 }
 
                 else -> return left
             }
         }
+    }
+
+    fun parseGroup(otherwise: () -> Expression): Expression {
+        val left = this.peek() ?: throw UnexpectedEndOfInputError
+        return when (left.value) {
+            is TokenValue.LParen -> {
+                this.idx += 1
+                val expr = this.parseExpression()
+                val rparen = this.peek() ?: throw UnexpectedEndOfInputError
+                check(rparen.value == TokenValue.RParen) {
+                    throw UnexpectedTokenError(rparen.line, rparen.col, "")
+                }
+                this.idx += 1
+                expr
+            }
+
+            else -> otherwise()
+        }
+    }
+
+    fun parseExpression(): Expression {
+        // expression => '(' factor ')' | factor
+        return this.parseGroup(this::parseFactor)
     }
 
     fun parseIdentStatement(ident: TokenValue.Ident): Statement {
