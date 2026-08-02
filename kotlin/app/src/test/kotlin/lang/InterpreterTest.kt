@@ -5,199 +5,226 @@ package lang
 
 import kotlin.test.*
 
+fun ident(name: String, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.Ident(name), line, col)
+
+fun num(value: Double, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.NumberLiteral(value), line, col)
+
+fun str(value: String, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.StringLiteral(value), line, col)
+
+fun bool(value: Boolean, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.BoolLiteral(value), line, col)
+
+fun unary(operator: TokenValue, operand: Expression, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.Unary(operator, operand), line, col)
+
+fun binary(operator: TokenValue, left: Expression, right: Expression, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.Binary(operator, left, right), line, col)
+
+fun varDecl(name: String, type: VariableType?, value: Expression?, line: Int = 0, col: Int = 0): Statement =
+    Statement(StatementType.VariableDeclaration(name, type, value), line, col)
+
+fun printStmt(value: Expression, ln: Boolean, line: Int = 0, col: Int = 0): Statement =
+    Statement(StatementType.Print(value, ln), line, col)
+
+fun varAssignment(name: String, value: Expression, line: Int = 0, col: Int = 0): Statement =
+    Statement(StatementType.VariableAssignment(name, value), line, col)
+
+fun block(stmts: List<Statement>, line: Int = 0, col: Int = 0): Statement =
+    Statement(StatementType.Block(stmts), line, col)
+
+fun ifStmt(
+    condition: Expression,
+    thenBranch: Statement,
+    elseBranch: Statement? = null,
+    line: Int = 0,
+    col: Int = 0
+): Statement =
+    Statement(StatementType.If(condition, thenBranch, elseBranch), line, col)
+
 class InterpreterTest {
     @Test
-    fun `interprets unary bool negation`() {
-        val expr = Expression.Unary(
-            operator = TokenValue.Excl,
-            operand = Expression.BoolLiteral(true),
+    fun `interprets unary`() {
+        data class Input(
+            val name: String,
+            val expr: Expression,
+            val expected: VariableValue,
         )
-        val interpreter = Interpreter()
-        val result = interpreter.interpretUnary(expr)
 
-        assertEquals(VariableValue.Bool(false), result)
-    }
-
-    @Test
-    fun `interprets unary number negation`() {
-        val expr = Expression.Unary(
-            operator = TokenValue.Minus,
-            operand = Expression.NumberLiteral(12.0),
-        )
-        val interpreter = Interpreter()
-        val result = interpreter.interpretUnary(expr)
-
-        assertEquals(VariableValue.Number(-12.0), result)
-    }
-
-    @Test
-    fun `interprets unary number negation nested`() {
-        val expr = Expression.Unary(
-            operator = TokenValue.Minus,
-            operand = Expression.Unary(
-                operator = TokenValue.Minus,
-                operand = Expression.NumberLiteral(12.0),
+        val inputs = listOf(
+            // !true
+            Input(
+                "!true",
+                unary(TokenValue.Excl, bool(true)),
+                VariableValue.Bool(false)
+            ),
+            // -12.0
+            Input(
+                "-12.0",
+                unary(TokenValue.Minus, num(12.0)),
+                VariableValue.Number(-12.0)
+            ),
+            // --12.0
+            Input(
+                "--12.0",
+                unary(TokenValue.Minus, unary(TokenValue.Minus, num(12.0))),
+                VariableValue.Number(12.0)
             ),
         )
-        val interpreter = Interpreter()
-        val result = interpreter.interpretUnary(expr)
 
-        assertEquals(VariableValue.Number(12.0), result)
+        for (input in inputs) {
+            var result = Interpreter().interpretExpression(input.expr)
+            assertEquals(input.expected, result, "Failed to interpret unary: ${input.expr}")
+        }
     }
 
     @Test
-    fun `interprets logical`() {
-        // (true || false) && true
-        var expr = Expression.Binary(
-            operator = TokenValue.DoubleAmp,
-            left = Expression.Binary(
-                operator = TokenValue.DoublePipe,
-                left = Expression.BoolLiteral(true),
-                right = Expression.BoolLiteral(false),
+    fun `interprets binary`() {
+        data class Input(
+            val name: String,
+            val expr: Expression,
+            val expected: VariableValue,
+        )
+
+        val inputs = listOf(
+            // true || false && true => true
+            Input(
+                "true || false && true => true",
+                binary(
+                    TokenValue.DoubleAmp,
+                    binary(
+                        TokenValue.DoublePipe,
+                        bool(true),
+                        bool(false),
+                    ),
+                    bool(true),
+                ),
+                VariableValue.Bool(true),
             ),
-            right = Expression.BoolLiteral(true),
+            // 123 + 123 => 246
+            Input(
+                "123 + 123 => 246",
+                binary(TokenValue.Plus, num(123.0), num(123.0)),
+                VariableValue.Number(246.0),
+            ),
         )
-        val interpreter = Interpreter()
-        val result = interpreter.interpretBinary(expr)
 
-        assertEquals(VariableValue.Bool(true), result)
+        for (input in inputs) {
+            val result = Interpreter().interpretExpression(input.expr)
+            assertEquals(input.expected, result, "Failed to interpret binary ${input.name}")
+        }
     }
 
     @Test
-    fun `interprets variable declaration`() {
-        val interpreter = Interpreter()
-        val stmt = Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))
-        interpreter.interpretProgram(listOf(stmt))
-
-        assertEquals(VariableValue.Number(12.0), interpreter.scopes[0]["foo"])
-    }
-
-    @Test
-    fun `interprets print statement`() {
-        val printer = BufferedPrinter()
-
-        val interpreter = Interpreter(printer)
-        val stmt = listOf(
-            Statement.Print(Expression.NumberLiteral(123.45), false),
-            Statement.Print(Expression.NumberLiteral(22.0), true)
+    fun `parse statement`() {
+        data class Input(
+            val name: String,
+            val stmt: List<Statement>,
+            val expected: (interpreter: Interpreter) -> Unit,
         )
-        interpreter.interpretProgram(stmt)
 
-        assertEquals("123.4522.0\n", printer.sb.toString())
-    }
-
-    @Test
-    fun `interprets variable assignment`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
-            Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
-        )
-        interpreter.interpretProgram(stmt)
-
-        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
-    }
-
-    @Test
-    fun `interprets block`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
-            Statement.Block(
+        val inputs = listOf(
+            Input(
+                "foo := 12.0;",
+                listOf(varDecl("foo", null, num(12.0))),
+                { interpreter ->
+                    assertEquals(VariableValue.Number(12.0), interpreter.scopes[0]["foo"])
+                },
+            ),
+            Input(
+                "println 12.0; print \"123\"",
                 listOf(
-                    Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
-                )
-            )
-        )
-        interpreter.interpretProgram(stmt)
-
-        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
-    }
-
-    @Test
-    fun `disposes scope`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.Block(
+                    printStmt(num(12.0), true),
+                    printStmt(str("123"), false),
+                ),
+                { interpreter ->
+                    val printer = interpreter.printer
+                    assertNotNull(printer)
+                    val buffered = printer.sb.toString()
+                    val expected = "12.0\n123"
+                    assertEquals(expected, buffered)
+                },
+            ),
+            Input(
+                "x := 5; x = 10;",
                 listOf(
-                    Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))
-                )
-            )
-        )
-        interpreter.interpretProgram(stmt)
-        assertEquals(1, interpreter.scopes.size)
-
-        val globalScope = interpreter.scopes[0]
-        assertEquals(0, globalScope.size)
-    }
-
-    @Test
-    fun `interprets if statement`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
-            Statement.If(
-                Expression.BoolLiteral(true),
-                Statement.Block(
-                    listOf(
-                        Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
-                    ),
+                    varDecl("x", null, num(5.0)),
+                    varAssignment("x", num(10.0)),
                 ),
-                null
-            )
-        )
-        interpreter.interpretProgram(stmt)
-
-        assertEquals(1, interpreter.scopes.size)
-        assertNotNull(interpreter.scopes[0]["foo"])
-        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
-    }
-
-    @Test
-    fun `interprets if statement with else branch`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
-            Statement.If(
-                Expression.BoolLiteral(false),
-                null,
-                Statement.Block(
-                    listOf(
-                        Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
-                    ),
+                { interpreter ->
+                    val x = interpreter.scopes[0]["x"]
+                    assertNotNull(x)
+                    assertEquals(VariableValue.Number(10.0), x)
+                },
+            ),
+            Input(
+                "x := 5; { x = 10 }",
+                listOf(
+                    varDecl("x", null, num(5.0)),
+                    block(listOf(varAssignment("x", num(10.0)))),
                 ),
-            )
+                { interpreter ->
+                    val x = interpreter.scopes[0]["x"]
+                    assertNotNull(x)
+                    assertEquals(VariableValue.Number(10.0), x)
+                },
+            ),
+            Input(
+                "{ x := 5; }",
+                listOf(block(listOf(varDecl("x", null, num(5.0))))),
+                { interpreter ->
+                    assertEquals(1, interpreter.scopes.size)
+                    val x = interpreter.scopes[0]["x"]
+                    assertNull(x)
+                },
+            ),
+            Input(
+                "x := 10; if true { x = 5 } else { x = 15 }",
+                listOf(
+                    varDecl("x", null, num(10.0)),
+                    ifStmt(
+                        bool(true),
+                        block(listOf(varAssignment("x", num(5.0)))),
+                        block(listOf(varAssignment("x", num(15.0))))
+                    )
+                ),
+                { interpreter ->
+                    assertEquals(1, interpreter.scopes.size)
+                    val x = interpreter.scopes[0]["x"]
+                    assertNotNull(x)
+                    assertEquals(VariableValue.Number(5.0), x)
+                },
+            ),
+            Input(
+                "x := 10; if false { } else if false { x = 5 } else { x = 20 }",
+                listOf(
+                    varDecl("x", null, num(10.0)),
+                    ifStmt(
+                        bool(false),
+                        block(listOf()),
+                        ifStmt(
+                            bool(false),
+                            block(listOf()),
+                            block(listOf(varAssignment("x", num(20.0))))
+                        )
+                    )
+                ),
+                { interpreter ->
+                    assertEquals(1, interpreter.scopes.size)
+                    val x = interpreter.scopes[0]["x"]
+                    assertNotNull(x)
+                    assertEquals(VariableValue.Number(20.0), x)
+                },
+            ),
         )
-        interpreter.interpretProgram(stmt)
 
-        assertEquals(1, interpreter.scopes.size)
-        assertNotNull(interpreter.scopes[0]["foo"])
-        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
-    }
-
-    @Test
-    fun `interprets if statement with else if branch`() {
-        val interpreter = Interpreter()
-        val stmt = listOf(
-            Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0)),
-            Statement.If(
-                Expression.BoolLiteral(false),
-                null,
-                Statement.If(
-                    Expression.BoolLiteral(true),
-                    Statement.Block(
-                        listOf(
-                            Statement.VariableAssignment("foo", Expression.NumberLiteral(22.0))
-                        ),
-                    ),
-                    null,
-                )
-            )
-        )
-        interpreter.interpretProgram(stmt)
-
-        assertEquals(1, interpreter.scopes.size)
-        assertNotNull(interpreter.scopes[0]["foo"])
-        assertEquals(VariableValue.Number(22.0), interpreter.scopes[0]["foo"])
+        for (input in inputs) {
+            val printer = BufferedPrinter()
+            val interpreter = Interpreter(printer)
+            interpreter.interpretProgram(input.stmt)
+            input.expected(interpreter)
+        }
     }
 }

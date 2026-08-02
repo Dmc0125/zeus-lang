@@ -55,9 +55,10 @@ class Interpreter(
 ) {
     val scopes: MutableList<MutableMap<String, VariableValue>> = mutableListOf(mutableMapOf())
 
-    fun interpretUnary(expression: Expression.Unary): VariableValue {
-        val value = interpretExpression(expression.operand)
-        return when (expression.operator) {
+    fun interpretUnary(expression: Node<ExpressionType.Unary>): VariableValue {
+        val value = interpretExpression(expression.type.operand)
+
+        return when (expression.type.operator) {
             is TokenValue.Minus -> {
                 val num = value as VariableValue.Number
                 VariableValue.Number(-num.value)
@@ -72,32 +73,33 @@ class Interpreter(
         }
     }
 
-    fun interpretBinary(expression: Expression.Binary): VariableValue {
-        when (expression.operator) {
+    fun interpretBinary(expression: Node<ExpressionType.Binary>): VariableValue {
+        val binary = expression.type
+        when (binary.operator) {
             is TokenValue.DoubleAmp -> {
-                val left = interpretExpression(expression.left) as VariableValue.Bool
+                val left = interpretExpression(binary.left) as VariableValue.Bool
                 if (!left.value) {
                     return VariableValue.Bool(false)
                 }
-                return interpretExpression(expression.right)
+                return interpretExpression(binary.right)
             }
 
             is TokenValue.DoublePipe -> {
-                val left = interpretExpression(expression.left) as VariableValue.Bool
+                val left = interpretExpression(binary.left) as VariableValue.Bool
                 if (left.value) {
                     return VariableValue.Bool(true)
                 }
-                return this.interpretExpression(expression.right)
+                return interpretExpression(binary.right)
             }
 
             else -> {
-                val left = interpretExpression(expression.left)
-                var right = interpretExpression(expression.right)
+                val left = interpretExpression(binary.left)
+                var right = interpretExpression(binary.right)
 
                 return when (left) {
                     is VariableValue.Number -> {
                         right = right as VariableValue.Number
-                        when (expression.operator) {
+                        when (binary.operator) {
                             TokenValue.Plus -> VariableValue.Number(left.value + right.value)
                             TokenValue.Minus -> VariableValue.Number(left.value - right.value)
                             TokenValue.Star -> VariableValue.Number(left.value * right.value)
@@ -119,7 +121,7 @@ class Interpreter(
 
                     is VariableValue.String -> {
                         right = right as VariableValue.String
-                        when (expression.operator) {
+                        when (binary.operator) {
                             TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
                             TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
                             else -> throw RuntimeException("Invalid operator for string comparison")
@@ -128,7 +130,7 @@ class Interpreter(
 
                     is VariableValue.Bool -> {
                         right = right as VariableValue.Bool
-                        when (expression.operator) {
+                        when (binary.operator) {
                             TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
                             TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
                             else -> throw RuntimeException("Invalid operator for boolean comparison")
@@ -139,50 +141,54 @@ class Interpreter(
         }
     }
 
-    fun interpretExpression(expression: Expression): VariableValue {
-        return when (expression) {
-            is Expression.Ident -> {
+    fun interpretExpression(expression: Node<ExpressionType>): VariableValue {
+        return when (expression.type) {
+            is ExpressionType.Ident -> {
+                val ident = expression.type
                 for (scope in this.scopes) {
-                    if (scope.contains(expression.name)) {
-                        return scope[expression.name]!!
+                    if (scope.contains(ident.name)) {
+                        return scope[ident.name]!!
                     }
                 }
                 throw RuntimeException("Unreachable")
             }
 
-            is Expression.NumberLiteral -> VariableValue.Number(expression.value)
-            is Expression.StringLiteral -> VariableValue.String(expression.value)
-            is Expression.BoolLiteral -> VariableValue.Bool(expression.value)
-            is Expression.Unary -> this.interpretUnary(expression)
-            is Expression.Binary -> this.interpretBinary(expression)
+            is ExpressionType.NumberLiteral -> VariableValue.Number(expression.type.value)
+            is ExpressionType.StringLiteral -> VariableValue.String(expression.type.value)
+            is ExpressionType.BoolLiteral -> VariableValue.Bool(expression.type.value)
+            is ExpressionType.Unary -> this.interpretUnary(expression as Node<ExpressionType.Unary>)
+            is ExpressionType.Binary -> this.interpretBinary(expression as Node<ExpressionType.Binary>)
         }
     }
 
     fun interpretStatement(statement: Statement) {
-        when (statement) {
-            is Statement.VariableDeclaration -> {
+        when (statement.type) {
+            is StatementType.VariableDeclaration -> {
+                val decl = statement.type
                 val scope = this.scopes[this.scopes.size - 1]
-                if (statement.value == null) {
-                    scope[statement.name] = VariableValue.Number(0.0)
+                if (decl.value == null) {
+                    scope[decl.name] = VariableValue.Number(0.0)
                 } else {
-                    scope[statement.name] = interpretExpression(statement.value)
+                    scope[decl.name] = interpretExpression(decl.value)
                 }
             }
 
-            is Statement.VariableAssignment -> {
+            is StatementType.VariableAssignment -> {
+                val assign = statement.type
                 for (scope in this.scopes) {
-                    if (scope.contains(statement.name)) {
-                        scope[statement.name] = interpretExpression(statement.value)
+                    if (scope.contains(assign.name)) {
+                        scope[assign.name] = interpretExpression(assign.value)
                         return
                     }
                 }
                 throw RuntimeException("Ureachable")
             }
 
-            is Statement.Print -> {
+            is StatementType.Print -> {
+                val print = statement.type
                 if (this.printer != null) {
-                    val text = interpretExpression(statement.expression).toString()
-                    if (statement.ln) {
+                    val text = interpretExpression(print.expression).toString()
+                    if (print.ln) {
                         this.printer.println(text)
                     } else {
                         this.printer.print(text)
@@ -190,25 +196,26 @@ class Interpreter(
                 }
             }
 
-            is Statement.Block -> {
+            is StatementType.Block -> {
                 this.scopes.add(mutableMapOf())
-                for (statement in statement.statements) {
+                for (statement in statement.type.statements) {
                     this.interpretStatement(statement)
                 }
                 this.scopes.removeAt(this.scopes.size - 1)
             }
 
-            is Statement.If -> {
-                var condition = this.interpretExpression(statement.condition)
+            is StatementType.If -> {
+                val ifStmt = statement.type
+                var condition = this.interpretExpression(ifStmt.condition)
                 assert(condition is VariableValue.Bool) {
                     throw RuntimeException("Condition must be a boolean")
                 }
                 condition = condition as VariableValue.Bool
 
-                if (condition.value && statement.thenBranch != null) {
-                    this.interpretStatement(statement.thenBranch)
-                } else if (!condition.value && statement.elseBranch != null) {
-                    this.interpretStatement(statement.elseBranch)
+                if (condition.value && ifStmt.thenBranch != null) {
+                    this.interpretStatement(ifStmt.thenBranch)
+                } else if (!condition.value && ifStmt.elseBranch != null) {
+                    this.interpretStatement(ifStmt.elseBranch)
                 }
             }
         }

@@ -7,26 +7,27 @@ class AnalyzerScope {
 class Analyzer {
     val stack: MutableList<AnalyzerScope> = mutableListOf(AnalyzerScope())
 
-    fun analyzeUnary(expression: Expression.Unary): VariableType {
-        val type = this.analyzeExpression(expression.operand)
+    fun analyzeUnary(expression: Node<ExpressionType.Unary>): VariableType {
+        val unary = expression.type
+        val type = this.analyzeExpression(unary.operand)
 
         return when (type) {
             VariableType.Number -> {
-                when (expression.operator) {
+                when (unary.operator) {
                     is TokenValue.Minus, is TokenValue.Plus -> type
                     else ->
                         throw RuntimeException(
-                            "Invalid operator: ${expression.operator}; unary requires \"-\" or \"+\""
+                            "Invalid operator: ${unary.operator}; unary requires \"-\" or \"+\""
                         )
                 }
             }
 
             VariableType.Bool -> {
-                when (expression.operator) {
+                when (unary.operator) {
                     is TokenValue.Excl -> type
                     else ->
                         throw RuntimeException(
-                            "Invalid operator: ${expression.operator}; unary requires \"!\""
+                            "Invalid operator: ${unary.operator}; unary requires \"!\""
                         )
                 }
             }
@@ -35,9 +36,10 @@ class Analyzer {
         }
     }
 
-    fun analyzeBinary(expression: Expression.Binary): VariableType {
-        val leftType = this.analyzeExpression(expression.left)
-        val rightType = this.analyzeExpression(expression.right)
+    fun analyzeBinary(expression: Node<ExpressionType.Binary>): VariableType {
+        val binary = expression.type
+        val leftType = this.analyzeExpression(binary.left)
+        val rightType = this.analyzeExpression(binary.right)
 
         if (leftType != rightType) {
             throw RuntimeException(
@@ -45,7 +47,7 @@ class Analyzer {
             )
         }
 
-        return when (expression.operator) {
+        return when (binary.operator) {
             is TokenValue.Minus, is TokenValue.Plus,
             is TokenValue.Star, is TokenValue.Slash -> {
                 check(leftType == VariableType.Number) {
@@ -77,33 +79,34 @@ class Analyzer {
 
             is TokenValue.DoubleEqual, is TokenValue.ExclEqual -> VariableType.Bool
             else -> throw RuntimeException(
-                "Invalid operator: ${expression.operator}"
+                "Invalid operator: ${binary.operator}"
             )
         }
     }
 
     fun analyzeExpression(expression: Expression): VariableType {
-        return when (expression) {
-            is Expression.Ident -> {
+        return when (expression.type) {
+            is ExpressionType.Ident -> {
+                val ident = expression.type
                 for (scope in this.stack) {
-                    if (scope.variables.containsKey(expression.name)) {
-                        return scope.variables[expression.name]!!
+                    if (scope.variables.containsKey(ident.name)) {
+                        return scope.variables[ident.name]!!
                     }
                 }
-                throw RuntimeException("Undefined variable: ${expression.name}")
+                throw RuntimeException("Undefined variable: ${ident.name}")
             }
 
-            is Expression.NumberLiteral -> VariableType.Number
-            is Expression.StringLiteral -> VariableType.String
-            is Expression.BoolLiteral -> VariableType.Bool
-            is Expression.Unary -> this.analyzeUnary(expression)
-            is Expression.Binary -> this.analyzeBinary(expression)
+            is ExpressionType.NumberLiteral -> VariableType.Number
+            is ExpressionType.StringLiteral -> VariableType.String
+            is ExpressionType.BoolLiteral -> VariableType.Bool
+            is ExpressionType.Unary -> this.analyzeUnary(expression as Node<ExpressionType.Unary>)
+            is ExpressionType.Binary -> this.analyzeBinary(expression as Node<ExpressionType.Binary>)
         }
     }
 
     fun analyzeStatement(statement: Statement) {
         when (statement) {
-            is Statement.VariableDeclaration -> {
+            is StatementType.VariableDeclaration -> {
                 val scope = this.stack[this.stack.size - 1]
 
                 if (scope.variables.containsKey(statement.name)) {
@@ -126,7 +129,7 @@ class Analyzer {
                 }
             }
 
-            is Statement.VariableAssignment -> {
+            is StatementType.VariableAssignment -> {
                 var found = false
                 for (scope in this.stack) {
                     if (scope.variables.containsKey(statement.name)) {
@@ -141,8 +144,8 @@ class Analyzer {
                 check(found) { throw RuntimeException("Undefined variablel: ${statement.name}") }
             }
 
-            is Statement.Print -> this.analyzeExpression(statement.expression)
-            is Statement.Block -> {
+            is StatementType.Print -> this.analyzeExpression(statement.expression)
+            is StatementType.Block -> {
                 this.stack.add(AnalyzerScope())
                 for (statement in statement.statements) {
                     this.analyzeStatement(statement)
@@ -150,7 +153,7 @@ class Analyzer {
                 this.stack.removeAt(this.stack.size - 1)
             }
 
-            is Statement.If -> {
+            is StatementType.If -> {
                 val conditionType = this.analyzeExpression(statement.condition)
                 check(conditionType == VariableType.Bool) {
                     throw RuntimeException("Condition must be a boolean")

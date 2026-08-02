@@ -1,25 +1,41 @@
 package lang
 
-sealed interface Expression {
-    data class Ident(val name: String) : Expression
-    data class NumberLiteral(val value: Double) : Expression
-    data class StringLiteral(val value: String) : Expression
-    data class BoolLiteral(val value: Boolean) : Expression
-    data class Unary(val operator: TokenValue, val operand: Expression) : Expression
-    data class Binary(val operator: TokenValue, val left: Expression, val right: Expression) : Expression
+sealed interface ExpressionType {
+    data class Ident(val name: String) : ExpressionType
+    data class NumberLiteral(val value: Double) : ExpressionType
+    data class StringLiteral(val value: String) : ExpressionType
+    data class BoolLiteral(val value: Boolean) : ExpressionType
+    data class Unary(val operator: TokenValue, val operand: Expression) : ExpressionType
+    data class Binary(val operator: TokenValue, val left: Expression, val right: Expression) : ExpressionType
 }
 
-sealed interface Statement {
-    data class VariableDeclaration(val name: String, val type: VariableType?, val value: Expression?) : Statement
-    data class VariableAssignment(val name: String, val value: Expression) : Statement
-    data class Print(val expression: Expression, val ln: Boolean) : Statement
-    data class Block(val statements: List<Statement>) : Statement
+sealed interface StatementType {
+    data class VariableDeclaration(val name: String, val type: VariableType?, val value: Expression?) :
+        StatementType
+
+    data class VariableAssignment(val name: String, val value: Expression) : StatementType
+    data class Print(val expression: Expression, val ln: Boolean) : StatementType
+    data class Block(val statements: List<Statement>) : StatementType
     data class If(
         val condition: Expression,
-        val thenBranch: Statement.Block?,
+        val thenBranch: Statement?,
         val elseBranch: Statement?,
-    ) : Statement
+    ) : StatementType
 }
+
+data class Node<T>(
+    val type: T,
+    val line: Int,
+    val col: Int,
+) {
+    constructor(type: T, token: Token) : this(
+        type,
+        token.line,
+        token.col,
+    )
+}
+typealias Expression = Node<ExpressionType>
+typealias Statement = Node<StatementType>
 
 class Parser(
     val tokens: List<Token>,
@@ -37,25 +53,25 @@ class Parser(
             throw UnexpectedEndOfInputError
         }
 
-        when (token.value) {
+        return when (token.value) {
             is TokenValue.NumberLiteral -> {
                 this.idx += 1
-                return Expression.NumberLiteral(token.value.value)
+                Expression(ExpressionType.NumberLiteral(token.value.value), token)
             }
 
             is TokenValue.Ident -> {
                 this.idx += 1
-                return Expression.Ident(token.value.name)
+                Expression(ExpressionType.Ident(token.value.name), token)
             }
 
             is TokenValue.StringLiteral -> {
                 this.idx += 1
-                return Expression.StringLiteral(token.value.value)
+                Expression(ExpressionType.StringLiteral(token.value.value), token)
             }
 
             is TokenValue.BoolLiteral -> {
                 this.idx += 1
-                return Expression.BoolLiteral(token.value.value)
+                Expression(ExpressionType.BoolLiteral(token.value.value), token)
             }
 
             else -> {
@@ -76,9 +92,12 @@ class Parser(
             is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Excl -> {
                 this.idx += 1
                 val operand = this.parseGroup(this::parseUnary)
-                Expression.Unary(
-                    operator = token.value,
-                    operand = operand,
+                Expression(
+                    ExpressionType.Unary(
+                        operator = token.value,
+                        operand = operand,
+                    ),
+                    token,
                 )
             }
 
@@ -98,7 +117,11 @@ class Parser(
                 is TokenValue.Star, TokenValue.Slash -> {
                     this.idx += 1
                     val right = this.parseGroup(this::parseUnary)
-                    left = Expression.Binary(operator = operator.value, left = left, right = right)
+                    left = Expression(
+                        ExpressionType.Binary(operator = operator.value, left = left, right = right),
+                        left.line,
+                        left.col,
+                    )
                 }
 
                 else -> return left
@@ -118,7 +141,11 @@ class Parser(
                 is TokenValue.Plus, is TokenValue.Minus -> {
                     this.idx += 1
                     val right = this.parseGroup(this::parseTerm)
-                    left = Expression.Binary(operator = operator.value, left = left, right = right)
+                    left = Expression(
+                        ExpressionType.Binary(operator = operator.value, left = left, right = right),
+                        left.line,
+                        left.col,
+                    )
                 }
 
                 else -> return left
@@ -140,10 +167,10 @@ class Parser(
                 is TokenValue.LtEqual, is TokenValue.GtEqual -> {
                     this.idx += 1
                     val right = this.parseGroup(this::parseFactor)
-                    left = Expression.Binary(
-                        operator = operator.value,
-                        left = left,
-                        right = right,
+                    left = Expression(
+                        ExpressionType.Binary(operator = operator.value, left = left, right = right),
+                        left.line,
+                        left.col,
                     )
                 }
 
@@ -163,10 +190,10 @@ class Parser(
                 is TokenValue.DoubleAmp, is TokenValue.DoublePipe -> {
                     this.idx += 1
                     val right = this.parseComparison()
-                    left = Expression.Binary(
-                        operator = operator.value,
-                        left = left,
-                        right = right,
+                    left = Expression(
+                        ExpressionType.Binary(operator = operator.value, left = left, right = right),
+                        left.line,
+                        left.col,
                     )
                 }
 
@@ -198,15 +225,17 @@ class Parser(
         return this.parseGroup(this::parseLogical)
     }
 
-    fun parseIdentStatement(ident: TokenValue.Ident): Statement {
+    fun parseIdentStatement(identToken: Token): Statement {
         // identStatement => variableDeclaration | variableAssignment
         // variableDeclaration => ident ':=' expression | ident ':' type | ident ':' type '=' expression
         // variableAssignment => ident '=' expression
 
+        val ident = identToken.value as TokenValue.Ident
+
         this.idx += 1
         val next = this.peek() ?: throw UnexpectedEndOfInputError
 
-        return when (next.value) {
+        val stmtType = when (next.value) {
             is TokenValue.Colon -> {
                 this.idx += 1
                 val type = this.peek() ?: throw UnexpectedEndOfInputError
@@ -215,7 +244,7 @@ class Parser(
                     is TokenValue.Equal -> {
                         this.idx += 1
                         val value = this.parseExpression()
-                        Statement.VariableDeclaration(
+                        StatementType.VariableDeclaration(
                             name = ident.name,
                             type = null,
                             value = value,
@@ -230,13 +259,13 @@ class Parser(
                         if (equal.value == TokenValue.Equal) {
                             this.idx += 1
                             val value = this.parseExpression()
-                            Statement.VariableDeclaration(
+                            StatementType.VariableDeclaration(
                                 name = ident.name,
                                 type = variableType,
                                 value = value,
                             )
                         } else {
-                            Statement.VariableDeclaration(
+                            StatementType.VariableDeclaration(
                                 name = ident.name,
                                 type = variableType,
                                 value = null,
@@ -251,7 +280,7 @@ class Parser(
             is TokenValue.Equal -> {
                 this.idx += 1
                 val value = this.parseExpression()
-                return Statement.VariableAssignment(
+                StatementType.VariableAssignment(
                     name = ident.name,
                     value = value,
                 )
@@ -259,9 +288,11 @@ class Parser(
 
             else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}")
         }
+
+        return Statement(stmtType, identToken.line, identToken.col)
     }
 
-    fun parseBlockStatement(): Statement.Block? {
+    fun parseBlockStatement(lBrace: Token): Statement? {
         // block => '{' statement* '}'
 
         this.idx += 1 // skip '{'
@@ -283,14 +314,19 @@ class Parser(
 
         this.idx += 1 // skip '}'
 
+        // TODO: Don't do this
         if (statements.isEmpty()) {
             return null
         }
 
-        return Statement.Block(statements)
+        return Statement(
+            StatementType.Block(statements),
+            lBrace.line,
+            lBrace.col,
+        )
     }
 
-    fun parseIfStatement(): Statement {
+    fun parseIfStatement(ifToken: Token): Statement {
         // if => 'if' expression '{' statement* '}' ('else' '{' statement* '}')?
 
         this.idx += 1 // skip 'if'
@@ -302,25 +338,29 @@ class Parser(
             throw UnexpectedTokenError(lBrace.line, lBrace.col, "${lBrace.value}", "LBrace")
         }
 
-        val thenBranch = this.parseBlockStatement()
+        val thenBranch = this.parseBlockStatement(lBrace)
 
         val elseToken = this.peek()
         var elseBranch: Statement? = null
 
         if (elseToken?.value == TokenValue.Else) {
             this.idx += 1
-            val ifToken = this.peek() ?: throw UnexpectedEndOfInputError
-            elseBranch = when (ifToken.value) {
-                is TokenValue.If -> this.parseIfStatement()
-                is TokenValue.LBrace -> this.parseBlockStatement()
-                else -> throw UnexpectedTokenError(ifToken.line, ifToken.col, "${ifToken.value}", "LBrace or If")
+            val next = this.peek() ?: throw UnexpectedEndOfInputError
+            elseBranch = when (next.value) {
+                is TokenValue.If -> this.parseIfStatement(next)
+                is TokenValue.LBrace -> this.parseBlockStatement(next)
+                else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "LBrace or If")
             }
         }
 
-        return Statement.If(
-            condition = cond,
-            thenBranch = thenBranch,
-            elseBranch = elseBranch,
+        return Statement(
+            StatementType.If(
+                condition = cond,
+                thenBranch = thenBranch,
+                elseBranch = elseBranch,
+            ),
+            line = ifToken.line,
+            col = ifToken.col,
         )
     }
 
@@ -331,15 +371,20 @@ class Parser(
         check(next != null) { throw UnexpectedEndOfInputError }
 
         val (statement, requiresSemicolon) = when (next.value) {
-            is TokenValue.Ident -> Pair(this.parseIdentStatement(next.value), true)
+            is TokenValue.Ident -> Pair(this.parseIdentStatement(next), true)
             is TokenValue.Print -> {
                 // print => 'print' expression
                 this.idx += 1
-                Pair(Statement.Print(this.parseExpression(), next.value.ln), true)
+                val stmt = Statement(
+                    StatementType.Print(this.parseExpression(), next.value.ln),
+                    next.line,
+                    next.col,
+                )
+                Pair(stmt, true)
             }
 
-            is TokenValue.LBrace -> Pair(this.parseBlockStatement(), false)
-            is TokenValue.If -> Pair(this.parseIfStatement(), false)
+            is TokenValue.LBrace -> Pair(this.parseBlockStatement(next), false)
+            is TokenValue.If -> Pair(this.parseIfStatement(next), false)
 
             else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "identifier or print")
         }

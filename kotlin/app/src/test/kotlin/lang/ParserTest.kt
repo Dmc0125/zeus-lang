@@ -4,455 +4,425 @@ import kotlin.test.*
 
 class ParserTest {
     @Test
-    fun `parses number`() {
-        val tokens = listOf(Token(TokenValue.NumberLiteral(123.45), 1, 1))
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertTrue(expr is Expression.NumberLiteral)
-        assertEquals(123.45, expr.value)
-    }
-
-    @Test
-    fun `parses bool literal`() {
-        val tokens = listOf(Token(TokenValue.BoolLiteral(true), 1, 1))
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertIs<Expression.BoolLiteral>(expr)
-        assertEquals(true, expr.value)
-    }
-
-    @Test
-    fun `parses unary number`() {
-        val tokens = listOf(
-            Token(TokenValue.Minus, 1, 1),
-            Token(TokenValue.NumberLiteral(123.45), 1, 2),
+    fun `parses literal`() {
+        data class Input(
+            val token: Token,
+            val expected: Expression,
         )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
 
-        assertTrue(expr is Expression.Unary)
-        assertEquals(TokenValue.Minus, expr.operator)
-        assertTrue(expr.operand is Expression.NumberLiteral)
-        assertEquals(123.45, expr.operand.value)
-    }
-
-    @Test
-    fun `parses unary bool`() {
-        val tokens = listOf(
-            Token(TokenValue.Excl, 1, 1),
-            Token(TokenValue.BoolLiteral(true), 1, 2),
+        val inputs = listOf(
+            Input(
+                Token(TokenValue.NumberLiteral(123.45), 1, 1),
+                num(123.45, 1, 1),
+            ),
+            Input(
+                Token(TokenValue.StringLiteral("hello"), 1, 1),
+                str("hello", 1, 1),
+            ),
+            Input(
+                Token(TokenValue.BoolLiteral(true), 1, 1),
+                bool(true, 1, 1)
+            ),
         )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
 
-        assertIs<Expression.Unary>(expr)
-        assertEquals(TokenValue.Excl, expr.operator)
-        assertIs<Expression.BoolLiteral>(expr.operand)
-        assertEquals(true, expr.operand.value)
-    }
-
-    @Test
-    fun `parses unary number multiple`() {
-        // -(-(-123.45))
-        val tokens = listOf(
-            Token(TokenValue.Minus, 1, 1),
-            Token(TokenValue.Minus, 1, 2),
-            Token(TokenValue.Minus, 1, 3),
-            Token(TokenValue.NumberLiteral(123.45), 1, 4),
-        )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        // -(-(-123.45))
-        assertTrue(expr is Expression.Unary)
-        assertEquals(TokenValue.Minus, expr.operator)
-        // -(-123.45)
-        assertTrue(expr.operand is Expression.Unary)
-        assertEquals(TokenValue.Minus, expr.operand.operator)
-        // -123.45
-        assertTrue(expr.operand.operand is Expression.Unary)
-        assertEquals(TokenValue.Minus, expr.operand.operand.operator)
-        // 123.45
-        assertTrue(expr.operand.operand.operand is Expression.NumberLiteral)
-        assertEquals(123.45, expr.operand.operand.operand.value)
-    }
-
-    @Test
-    fun `parses factor`() {
-        // (123.45 + 67.89) - 3
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(123.45), 1, 1),
-            Token(TokenValue.Plus, 1, 7),
-            Token(TokenValue.NumberLiteral(67.89), 1, 8),
-            Token(TokenValue.Minus, 1, 13),
-            Token(TokenValue.NumberLiteral(3.0), 1, 14),
-        )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        println("expr = $expr")
-
-        // (123.45 + 67.89) - 3
-        assertIs<Expression.Binary>(expr)
-        assertIs<TokenValue.Minus>(expr.operator)
-
-        // 123.45 + 67.89
-        assertIs<Expression.Binary>(expr.left)
-        assertIs<TokenValue.Plus>(expr.left.operator)
-
-        assertIs<Expression.NumberLiteral>(expr.left.left)
-        assertEquals(123.45, expr.left.left.value)
-
-        assertIs<Expression.NumberLiteral>(expr.left.right)
-        assertEquals(67.89, expr.left.right.value)
-
-        // 3
-        assertIs<Expression.NumberLiteral>(expr.right)
-        assertEquals(3.0, expr.right.value)
-    }
-
-    @Test
-    fun `parses term`() {
-        // (123.45 * 25) / 5
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(123.45), 1, 1),
-            Token(TokenValue.Star, 1, 7),
-            Token(TokenValue.NumberLiteral(25.0), 1, 8),
-            Token(TokenValue.Slash, 1, 13),
-            Token(TokenValue.NumberLiteral(5.0), 1, 14),
-        )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        // (123.45 * 25) / 5
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.Slash, expr.operator)
-
-        // 123.45 * 25
-        assertIs<Expression.Binary>(expr.left)
-        assertEquals(TokenValue.Star, expr.left.operator)
-
-        assertIs<Expression.NumberLiteral>(expr.left.left)
-        assertEquals(123.45, expr.left.left.value)
-
-        assertIs<Expression.NumberLiteral>(expr.left.right)
-        assertEquals(25.0, expr.left.right.value)
-
-        // 5
-        assertIs<Expression.NumberLiteral>(expr.right)
-        assertEquals(5.0, expr.right.value)
-    }
-
-    @Test
-    fun `parses term with factor`() {
-        // 12 * 25 + 5 / 3 => (12 * 25) + (5 / 3)
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(12.0), 1, 1),
-            Token(TokenValue.Star, 1, 3),
-            Token(TokenValue.NumberLiteral(25.0), 1, 5),
-            Token(TokenValue.Plus, 1, 6),
-            Token(TokenValue.NumberLiteral(5.0), 1, 8),
-            Token(TokenValue.Slash, 1, 9),
-            Token(TokenValue.NumberLiteral(3.0), 1, 11),
-        )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        // (12 * 25) + (5 / 3)
-        assertTrue(expr is Expression.Binary)
-        assertEquals(TokenValue.Plus, expr.operator)
-
-        run { // (12 * 25)
-            assertTrue(expr.left is Expression.Binary)
-
-            val left_expr = expr.left
-            assertEquals(TokenValue.Star, left_expr.operator)
-
-            assertTrue(left_expr.left is Expression.NumberLiteral)
-            assertEquals(12.0, left_expr.left.value)
-
-            assertTrue(left_expr.right is Expression.NumberLiteral)
-            assertEquals(25.0, left_expr.right.value)
-        }
-
-        run { // (5 / 3)
-            val right = expr.right
-
-            assertTrue(right is Expression.Binary)
-            assertEquals(TokenValue.Slash, right.operator)
-
-            assertTrue(right.left is Expression.NumberLiteral)
-            assertEquals(5.0, right.left.value)
-
-            assertTrue(right.right is Expression.NumberLiteral)
-            assertEquals(3.0, right.right.value)
+        for (input in inputs) {
+            val parser = Parser(listOf(input.token))
+            val expr = parser.parseExpression()
+            assertEquals(input.expected, expr)
         }
     }
 
     @Test
-    fun `parses group`() {
-        val tokens = listOf(
-            Token(TokenValue.LParen, 1, 1),
-            Token(TokenValue.NumberLiteral(123.45), 1, 2),
-            Token(TokenValue.RParen, 1, 6)
+    fun `parses unary`() {
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Expression,
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
+        val inputs = listOf(
+            // -123.45
+            Input(
+                "-123.45",
+                listOf(
+                    Token(TokenValue.Minus, 1, 1),
+                    Token(TokenValue.NumberLiteral(123.45), 1, 2),
+                ),
+                unary(TokenValue.Minus, num(123.45, 1, 2), 1, 1),
+            ),
+            // !true
+            Input(
+                "!true",
+                listOf(
+                    Token(TokenValue.Excl, 1, 1),
+                    Token(TokenValue.BoolLiteral(true), 1, 2),
+                ),
+                unary(TokenValue.Excl, bool(true, 1, 2), 1, 1),
+            ),
+            // --22
+            Input(
+                "--22",
+                listOf(
+                    Token(TokenValue.Minus, 1, 1),
+                    Token(TokenValue.Minus, 1, 2),
+                    Token(TokenValue.NumberLiteral(22.0), 1, 3),
+                ),
+                unary(TokenValue.Minus, unary(TokenValue.Minus, num(22.0, 1, 3), 1, 2), 1, 1),
+            ),
+            // +123.45
+            Input(
+                "+123.45",
+                listOf(
+                    Token(TokenValue.Plus, 1, 1),
+                    Token(TokenValue.NumberLiteral(123.45), 1, 2),
+                ),
+                unary(TokenValue.Plus, num(123.45, 1, 2), 1, 1),
+            ),
+            // !!false
+            Input(
+                "!!false",
+                listOf(
+                    Token(TokenValue.Excl, 1, 1),
+                    Token(TokenValue.Excl, 1, 2),
+                    Token(TokenValue.BoolLiteral(false), 1, 3),
+                ),
+                unary(TokenValue.Excl, unary(TokenValue.Excl, bool(false, 1, 3), 1, 2), 1, 1),
+            ),
+        )
 
-        assertIs<Expression.NumberLiteral>(expr)
-        assertEquals(123.45, expr.value)
+        for (input in inputs) {
+            val parser = Parser(input.tokens)
+            val expr = parser.parseExpression()
+            assertEquals(input.expected, expr, "Failed to parse unary ${input.name}")
+        }
     }
 
     @Test
-    fun `parses nested group`() {
-        val tokens = listOf(
-            Token(TokenValue.LParen, 1, 1),
-            Token(TokenValue.LParen, 1, 2),
-            Token(TokenValue.NumberLiteral(123.45), 1, 3),
-            Token(TokenValue.RParen, 1, 7),
-            Token(TokenValue.RParen, 1, 8),
+    fun `parses binary arithmetic`() {
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Expression,
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
+        val inputs = listOf(
+            // 0.0 + 0.0
+            Input(
+                "0.0 + 0.0",
+                listOf(
+                    Token(TokenValue.NumberLiteral(0.0), 1, 1),
+                    Token(TokenValue.Plus, 1, 2),
+                    Token(TokenValue.NumberLiteral(0.0), 1, 3),
+                ),
+                binary(TokenValue.Plus, num(0.0, 1, 1), num(0.0, 1, 3), 1, 1),
+            ),
+            // left association
+            // 123.45 + 67.89 - 3 => (123.45 + 67.89) - 3
+            Input(
+                "123.45 + 67.89 - 3",
+                listOf(
+                    Token(TokenValue.NumberLiteral(123.45), 1, 1),
+                    Token(TokenValue.Plus, 1, 7),
+                    Token(TokenValue.NumberLiteral(67.89), 1, 8),
+                    Token(TokenValue.Minus, 1, 14),
+                    Token(TokenValue.NumberLiteral(3.0), 1, 15),
+                ),
+                binary(
+                    TokenValue.Minus,
+                    binary(TokenValue.Plus, num(123.45, 1, 1), num(67.89, 1, 8), 1, 1),
+                    num(3.0, 1, 15),
+                    1, 1
+                ),
+            ),
+            // precedence
+            // 123.0 + 22.1 * 85.5 / 3.9 => 123.0 + ((22.1 * 85.5) / 3.9)
+            Input(
+                "123.0 + 22.1 * 85.5 / 3.9",
+                listOf(
+                    Token(TokenValue.NumberLiteral(123.0), 1, 1),
+                    Token(TokenValue.Plus, 1, 7),
+                    Token(TokenValue.NumberLiteral(22.1), 1, 13),
+                    Token(TokenValue.Star, 1, 16),
+                    Token(TokenValue.NumberLiteral(85.5), 1, 19),
+                    Token(TokenValue.Slash, 1, 22),
+                    Token(TokenValue.NumberLiteral(3.9), 1, 25),
+                ),
+                binary(
+                    TokenValue.Plus,
+                    num(123.0, 1, 1),
+                    binary(
+                        TokenValue.Slash,
+                        binary(
+                            TokenValue.Star,
+                            num(22.1, 1, 13),
+                            num(85.5, 1, 19),
+                            1, 13,
+                        ),
+                        num(3.9, 1, 25),
+                        1, 13,
+                    ),
+                    1, 1,
+                ),
+            ),
+            // group
+            // 22.0 + 85.0 * (3.0 / 3.0) => 22.0 + (85.0 * (3.0 / 3.0))
+            Input(
+                "22.0 + 85.0 * (3.0 / 3.0)",
+                listOf(
+                    Token(TokenValue.NumberLiteral(22.0), 1, 1),
+                    Token(TokenValue.Plus, 1, 2),
+                    Token(TokenValue.NumberLiteral(85.0), 1, 3),
+                    Token(TokenValue.Star, 1, 4),
+                    Token(TokenValue.LParen, 1, 5),
+                    Token(TokenValue.NumberLiteral(3.0), 1, 6),
+                    Token(TokenValue.Slash, 1, 7),
+                    Token(TokenValue.NumberLiteral(3.0), 1, 8),
+                    Token(TokenValue.RParen, 1, 9),
+                ),
+                binary(
+                    TokenValue.Plus,
+                    num(22.0, 1, 1),
+                    binary(
+                        TokenValue.Star,
+                        num(85.0, 1, 3),
+                        binary(
+                            TokenValue.Slash,
+                            num(3.0, 1, 6),
+                            num(3.0, 1, 8),
+                            1, 6,
+                        ),
+                        1, 3,
+                    ),
+                    1, 1,
+                )
+            ),
+            // nested group
+            // ((22.0)) => 22.0
+            Input(
+                "((22.0))",
+                listOf(
+                    Token(TokenValue.LParen, 1, 1),
+                    Token(TokenValue.LParen, 1, 2),
+                    Token(TokenValue.NumberLiteral(22.0), 1, 3),
+                    Token(TokenValue.RParen, 1, 4),
+                    Token(TokenValue.RParen, 1, 5),
+                ),
+                num(22.0, 1, 3),
+            ),
+        )
 
-        assertIs<Expression.NumberLiteral>(expr)
-        assertEquals(123.45, expr.value)
+        for (input in inputs) {
+            val parser = Parser(input.tokens)
+            val expr = parser.parseExpression()
+            assertEquals(input.expected, expr, input.name)
+        }
     }
 
     @Test
-    fun `parses group with correct precedence`() {
-        // 12 * (25 + 5 / 3) => 12 * (25 + (5 / 3))
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(12.0), 1, 1),
-            Token(TokenValue.Star, 1, 3),
-            Token(TokenValue.LParen, 1, 4),
-            Token(TokenValue.NumberLiteral(25.0), 1, 5),
-            Token(TokenValue.Plus, 1, 6),
-            Token(TokenValue.NumberLiteral(5.0), 1, 8),
-            Token(TokenValue.Slash, 1, 9),
-            Token(TokenValue.NumberLiteral(3.0), 1, 11),
-            Token(TokenValue.RParen, 1, 12),
-        )
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        // 12 * (25 + 5 / 3)
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.Star, expr.operator)
-
-        assertIs<Expression.NumberLiteral>(expr.left)
-        assertEquals(12.0, expr.left.value)
-
-        // 25 + (5 / 3)
-        val right = expr.right
-        assertIs<Expression.Binary>(right)
-        assertEquals(TokenValue.Plus, right.operator)
-
-        assertIs<Expression.NumberLiteral>(right.left)
-        assertEquals(25.0, right.left.value)
-
-        // 5 / 3
-        var rightRight = right.right
-        assertIs<Expression.Binary>(rightRight)
-        assertEquals(TokenValue.Slash, rightRight.operator)
-
-        assertIs<Expression.NumberLiteral>(rightRight.left)
-        assertEquals(5.0, rightRight.left.value)
-        assertIs<Expression.NumberLiteral>(rightRight.right)
-        assertEquals(3.0, rightRight.right.value)
-    }
-
-    @Test
-    fun `parses double equal binary`() {
-        // 123.45 == 67.89
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(123.45), 1, 1),
-            Token(TokenValue.DoubleEqual, 1, 6),
-            Token(TokenValue.NumberLiteral(67.89), 1, 8)
+    fun `parses binary comparison`() {
+        data class Input(
+            val tokens: List<Token>,
+            val expected: Expression,
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.DoubleEqual, expr.operator)
-
-        assertIs<Expression.NumberLiteral>(expr.left)
-        assertEquals(123.45, expr.left.value)
-        assertIs<Expression.NumberLiteral>(expr.right)
-        assertEquals(67.89, expr.right.value)
-    }
-
-    @Test
-    fun `parses bool binary with correct precedence`() {
-        // 123 + 5 == 67 => (123 + 5) == 67
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(123.45), 1, 1),
-            Token(TokenValue.Plus, 1, 6),
-            Token(TokenValue.NumberLiteral(5.0), 1, 8),
-            Token(TokenValue.DoubleEqual, 1, 11),
-            Token(TokenValue.NumberLiteral(67.89), 1, 13)
+        val inputs = listOf(
+            // true == false
+            Input(
+                listOf(
+                    Token(TokenValue.BoolLiteral(true), 1, 1),
+                    Token(TokenValue.DoubleEqual, 1, 5),
+                    Token(TokenValue.BoolLiteral(false), 1, 7),
+                ),
+                binary(
+                    TokenValue.DoubleEqual,
+                    bool(true, 1, 1),
+                    bool(false, 1, 7),
+                    1, 1
+                ),
+            ),
+            // precendce
+            // 22.0 + 5.0 != 67.0
+            Input(
+                listOf(
+                    Token(TokenValue.NumberLiteral(22.0), 1, 1),
+                    Token(TokenValue.Plus, 1, 5),
+                    Token(TokenValue.NumberLiteral(5.0), 1, 7),
+                    Token(TokenValue.ExclEqual, 1, 11),
+                    Token(TokenValue.NumberLiteral(67.0), 1, 13),
+                ),
+                binary(
+                    TokenValue.ExclEqual,
+                    binary(
+                        TokenValue.Plus,
+                        num(22.0, 1, 1),
+                        num(5.0, 1, 7),
+                        1, 1,
+                    ),
+                    num(67.0, 1, 13),
+                    1, 1
+                ),
+            ),
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.DoubleEqual, expr.operator)
-
-        val sum = expr.left
-        assertIs<Expression.Binary>(sum)
-        assertEquals(TokenValue.Plus, sum.operator)
-        assertIs<Expression.NumberLiteral>(sum.left)
-        assertEquals(123.45, sum.left.value)
-        assertIs<Expression.NumberLiteral>(sum.right)
-        assertEquals(5.0, sum.right.value)
-
-        assertIs<Expression.NumberLiteral>(expr.right)
-        assertEquals(67.89, expr.right.value)
+        for (input in inputs) {
+            val parser = Parser(input.tokens)
+            val expr = parser.parseExpression()
+            assertEquals(input.expected, expr)
+        }
     }
 
     @Test
     fun `parses logical binary`() {
-        val tokens = listOf(
-            Token(TokenValue.NumberLiteral(123.45), 1, 1),
-            Token(TokenValue.DoublePipe, 1, 5),
-            Token(TokenValue.NumberLiteral(67.89), 1, 7)
+        data class Input(
+            val tokens: List<Token>,
+            val expected: Expression,
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.DoublePipe, expr.operator)
-        assertIs<Expression.NumberLiteral>(expr.left)
-        assertEquals(123.45, expr.left.value)
-        assertIs<Expression.NumberLiteral>(expr.right)
-        assertEquals(67.89, expr.right.value)
-    }
-
-    @Test
-    fun `parses logical binary with correct precedence`() {
-        // true == false && false => (true == false) && false
-        val tokens = listOf(
-            Token(TokenValue.BoolLiteral(true), 1, 1),
-            Token(TokenValue.DoubleEqual, 1, 5),
-            Token(TokenValue.BoolLiteral(false), 1, 7),
-            Token(TokenValue.DoubleAmp, 1, 8),
-            Token(TokenValue.BoolLiteral(false), 1, 10)
+        val inputs = listOf(
+            // true && false
+            Input(
+                listOf(
+                    Token(TokenValue.BoolLiteral(true), 1, 1),
+                    Token(TokenValue.DoubleAmp, 1, 2),
+                    Token(TokenValue.BoolLiteral(false), 1, 3),
+                ),
+                binary(
+                    TokenValue.DoubleAmp,
+                    bool(true, 1, 1),
+                    bool(false, 1, 3),
+                    1, 1
+                ),
+            ),
+            // "123" && true || 123.0 => ("123" && true) || 123.0
+            Input(
+                listOf(
+                    Token(TokenValue.StringLiteral("123"), 1, 1),
+                    Token(TokenValue.DoubleAmp, 1, 2),
+                    Token(TokenValue.BoolLiteral(true), 1, 3),
+                    Token(TokenValue.DoublePipe, 1, 4),
+                    Token(TokenValue.NumberLiteral(123.0), 1, 5),
+                ),
+                binary(
+                    TokenValue.DoublePipe,
+                    binary(
+                        TokenValue.DoubleAmp,
+                        str("123", 1, 1),
+                        bool(true, 1, 3),
+                        1, 1
+                    ),
+                    num(123.0, 1, 5),
+                    1, 1
+                ),
+            ),
         )
 
-        val parser = Parser(tokens)
-        val expr = parser.parseExpression()
-
-        assertIs<Expression.Binary>(expr)
-        assertEquals(TokenValue.DoubleAmp, expr.operator)
-
-        assertIs<Expression.Binary>(expr.left)
-        assertEquals(TokenValue.DoubleEqual, expr.left.operator)
-
-        assertIs<Expression.BoolLiteral>(expr.left.left)
-        assertTrue(expr.left.left.value)
-        assertIs<Expression.BoolLiteral>(expr.left.right)
-        assertFalse(expr.left.right.value)
-
-        assertIs<Expression.BoolLiteral>(expr.right)
-        assertFalse(expr.right.value)
+        for (input in inputs) {
+            val expr = Parser(input.tokens).parseExpression()
+            assertEquals(input.expected, expr)
+        }
     }
 
     @Test
     fun `parses variable declaration`() {
-        val tokens = listOf(
-            Token(TokenValue.Ident("foo"), 1, 1),
-            Token(TokenValue.Colon, 1, 4),
-            Token(TokenValue.Type(VariableType.Number), 1, 5),
-            Token(TokenValue.Semicolon, 1, 6)
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Statement,
         )
 
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertTrue(stmt is Statement.VariableDeclaration)
-        assertEquals("foo", stmt.name)
-        assertEquals(VariableType.Number, stmt.type)
-        assertEquals(stmt.value, null)
-    }
-
-    @Test
-    fun `parses variable declaration with expression`() {
-        val tokens = listOf(
-            Token(TokenValue.Ident("foo"), 1, 1),
-            Token(TokenValue.Colon, 1, 4),
-            Token(TokenValue.Equal, 1, 5),
-            Token(TokenValue.NumberLiteral(12.0), 1, 6),
-            Token(TokenValue.Semicolon, 1, 7),
+        val inputs = listOf(
+            // foo: number;
+            Input(
+                "foo: number;",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Colon, 1, 4),
+                    Token(TokenValue.Type(VariableType.Number), 1, 5),
+                    Token(TokenValue.Semicolon, 1, 6)
+                ),
+                varDecl("foo", VariableType.Number, null, 1, 1),
+            ),
+            // foo: number = 42;
+            Input(
+                "foo: number = 42;",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Colon, 1, 4),
+                    Token(TokenValue.Type(VariableType.Number), 1, 5),
+                    Token(TokenValue.Equal, 1, 6),
+                    Token(TokenValue.NumberLiteral(42.0), 1, 7),
+                    Token(TokenValue.Semicolon, 1, 8)
+                ),
+                varDecl("foo", VariableType.Number, num(42.0, 1, 7), 1, 1),
+            ),
+            // foo := 42;
+            Input(
+                "foo := 42;",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Colon, 1, 4),
+                    Token(TokenValue.Equal, 1, 5),
+                    Token(TokenValue.NumberLiteral(42.0), 1, 6),
+                    Token(TokenValue.Semicolon, 1, 7)
+                ),
+                varDecl("foo", null, num(42.0, 1, 6), 1, 1),
+            ),
+            // foo := x;
+            Input(
+                "foo := x;",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Colon, 1, 4),
+                    Token(TokenValue.Equal, 1, 5),
+                    Token(TokenValue.Ident("bar"), 1, 6),
+                    Token(TokenValue.Semicolon, 1, 7)
+                ),
+                varDecl("foo", null, ident("bar", 1, 6), 1, 1),
+            ),
         )
 
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertTrue(stmt is Statement.VariableDeclaration)
-        assertEquals("foo", stmt.name)
-        assertTrue(stmt.value is Expression.NumberLiteral)
-        assertEquals(12.0, stmt.value.value)
-    }
-
-    @Test
-    fun `parses indentifier in expression`() {
-        val tokens = listOf(
-            Token(TokenValue.Ident("foo"), 1, 1),
-            Token(TokenValue.Colon, 1, 4),
-            Token(TokenValue.Equal, 1, 5),
-            Token(TokenValue.Ident("bar"), 1, 6),
-            Token(TokenValue.Semicolon, 1, 9),
-        )
-
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertTrue(stmt is Statement.VariableDeclaration)
-        assertEquals("foo", stmt.name)
-        assertTrue(stmt.value is Expression.Ident)
-        assertEquals("bar", stmt.value.name)
-    }
-
-    @Test
-    fun `parses multiple statements`() {
-        val tokens = listOf(
-            Token(TokenValue.Ident("foo"), 1, 1),
-            Token(TokenValue.Colon, 1, 1),
-            Token(TokenValue.Equal, 1, 1),
-            Token(TokenValue.NumberLiteral(12.0), 1, 1),
-            Token(TokenValue.Semicolon, 1, 1),
-
-            Token(TokenValue.Ident("foo"), 2, 1),
-            Token(TokenValue.Equal, 2, 1),
-            Token(TokenValue.NumberLiteral(13.0), 2, 1),
-            Token(TokenValue.Semicolon, 2, 1),
-        )
-
-        val parser = Parser(tokens)
-        val statements = parser.parseProgram()
-        assertEquals(2, statements.size)
-
-        run {
-            val foo = statements[0]
-            assertIs<Statement.VariableDeclaration>(foo)
-            assertEquals("foo", foo.name)
-            assertIs<Expression.NumberLiteral>(foo.value)
-            assertEquals(12.0, foo.value.value)
+        for (input in inputs) {
+            val stmt = Parser(input.tokens).parseStatement()
+            assertEquals(input.expected, stmt, "Failed to parse ${input.name}")
         }
+    }
 
-        run {
-            val foo = statements[1]
-            assertIs<Statement.VariableAssignment>(foo)
-            assertEquals("foo", foo.name)
-            assertIs<Expression.NumberLiteral>(foo.value)
-            assertEquals(13.0, foo.value.value)
+    @Test
+    fun `parses variable assignment`() {
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Statement,
+        )
+
+        val inputs = listOf(
+            // foo = "123";
+            Input(
+                "foo = \"123\"",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Equal, 1, 5),
+                    Token(TokenValue.StringLiteral("123"), 1, 6),
+                    Token(TokenValue.Semicolon, 1, 9),
+                ),
+                varAssignment("foo", str("123", 1, 6), 1, 1),
+            ),
+            // foo = x;
+            Input(
+                "foo = x",
+                listOf(
+                    Token(TokenValue.Ident("foo"), 1, 1),
+                    Token(TokenValue.Equal, 1, 5),
+                    Token(TokenValue.Ident("x"), 1, 6),
+                    Token(TokenValue.Semicolon, 1, 9),
+                ),
+                varAssignment("foo", ident("x", 1, 6), 1, 1),
+            ),
+        )
+
+        for (input in inputs) {
+            val stmt = Parser(input.tokens).parseStatement()
+            assertEquals(input.expected, stmt, "Failed to parse ${input.name}")
         }
     }
 
@@ -467,10 +437,8 @@ class ParserTest {
         val parser = Parser(tokens)
         val stmt = parser.parseStatement()
 
-        assertTrue(stmt is Statement.Print)
-        assertTrue(stmt.expression is Expression.NumberLiteral)
-        assertEquals(123.45, stmt.expression.value)
-        assertFalse(stmt.ln)
+        val expected = printStmt(num(123.45, 1, 6), false, 1, 1)
+        assertEquals(expected, stmt)
     }
 
     @Test
@@ -486,106 +454,86 @@ class ParserTest {
         val parser = Parser(tokens)
         val stmt = parser.parseStatement()
 
-        assertIs<Statement.Block>(stmt)
-        assertEquals(1, stmt.statements.size)
-        assertIs<Statement.Print>(stmt.statements[0])
+        val expected = block(
+            listOf(
+                printStmt(num(123.45, 1, 7), false, 1, 2),
+            ), 1, 1
+        )
+        assertEquals(expected, stmt)
     }
 
     @Test
     fun `parses if statement`() {
-        val tokens = listOf(
-            Token(TokenValue.If, 1, 1),
-            Token(TokenValue.BoolLiteral(true), 1, 2),
-            Token(TokenValue.LBrace, 1, 4),
-            Token(TokenValue.Print(false), 1, 5),
-            Token(TokenValue.NumberLiteral(123.45), 1, 10),
-            Token(TokenValue.Semicolon, 1, 15),
-            Token(TokenValue.RBrace, 1, 1),
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Statement,
         )
 
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertIs<Statement.If>(stmt)
-        assertIs<Statement.Block>(stmt.thenBranch)
-
-        assertIs<Expression.BoolLiteral>(stmt.condition)
-        assertTrue(stmt.condition.value)
-
-        assertEquals(1, stmt.thenBranch.statements.size)
-        val print = stmt.thenBranch.statements[0]
-        assertIs<Statement.Print>(print)
-        assertIs<Expression.NumberLiteral>(print.expression)
-        assertEquals(123.45, print.expression.value)
-    }
-
-    @Test
-    fun `parses if statement with else branch`() {
-        val tokens = listOf(
-            Token(TokenValue.If, 1, 1),
-            Token(TokenValue.BoolLiteral(true), 1, 2),
-            Token(TokenValue.LBrace, 1, 4),
-            Token(TokenValue.Print(false), 1, 5),
-            Token(TokenValue.NumberLiteral(123.45), 1, 10),
-            Token(TokenValue.Semicolon, 1, 15),
-            Token(TokenValue.RBrace, 1, 1),
-            Token(TokenValue.Else, 1, 2),
-            Token(TokenValue.LBrace, 1, 3),
-            Token(TokenValue.Print(true), 1, 4),
-            Token(TokenValue.NumberLiteral(67.89), 1, 9),
-            Token(TokenValue.Semicolon, 1, 14),
-            Token(TokenValue.RBrace, 1, 2),
+        val inputs = listOf(
+            // if true { print 123.45; }
+            Input(
+                "if true { print 123.45; }",
+                listOf(
+                    Token(TokenValue.If, 1, 1),
+                    Token(TokenValue.BoolLiteral(true), 1, 2),
+                    Token(TokenValue.LBrace, 1, 4),
+                    Token(TokenValue.Print(false), 1, 5),
+                    Token(TokenValue.NumberLiteral(123.45), 1, 10),
+                    Token(TokenValue.Semicolon, 1, 15),
+                    Token(TokenValue.RBrace, 1, 1),
+                ),
+                ifStmt(
+                    bool(true, 1, 2),
+                    block(
+                        listOf(
+                            printStmt(num(123.45, 1, 10), false, 1, 5),
+                        ), 1, 4
+                    ),
+                    null,
+                    1, 1,
+                ),
+            ),
+            // if false { x: number; } else { y: string; }
+            Input(
+                "if false { x: number; } else { y: string; }",
+                listOf(
+                    Token(TokenValue.If, 1, 1),
+                    Token(TokenValue.BoolLiteral(false), 1, 2),
+                    Token(TokenValue.LBrace, 1, 4),
+                    Token(TokenValue.Ident("x"), 1, 5),
+                    Token(TokenValue.Colon, 1, 6),
+                    Token(TokenValue.Type(VariableType.Number), 1, 7),
+                    Token(TokenValue.Semicolon, 1, 8),
+                    Token(TokenValue.RBrace, 1, 9),
+                    Token(TokenValue.Else, 1, 10),
+                    Token(TokenValue.LBrace, 1, 11),
+                    Token(TokenValue.Ident("y"), 1, 12),
+                    Token(TokenValue.Colon, 1, 13),
+                    Token(TokenValue.Type(VariableType.String), 1, 14),
+                    Token(TokenValue.Semicolon, 1, 15),
+                    Token(TokenValue.RBrace, 1, 16),
+                ),
+                ifStmt(
+                    bool(false, 1, 2),
+                    block(
+                        listOf(
+                            varDecl("x", VariableType.Number, null, 1, 5),
+                        ), 1, 4
+                    ),
+                    block(
+                        listOf(
+                            varDecl("y", VariableType.String, null, 1, 12),
+                        ), 1, 11
+                    ),
+                    1, 1
+                ),
+            ),
         )
 
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertIs<Statement.If>(stmt)
-        assertIs<Statement.Block>(stmt.thenBranch)
-        assertIs<Statement.Block>(stmt.elseBranch)
-
-        // else
-        assertEquals(1, stmt.elseBranch.statements.size)
-        val elsePrint = stmt.elseBranch.statements[0]
-        assertIs<Statement.Print>(elsePrint)
-        assertIs<Expression.NumberLiteral>(elsePrint.expression)
-        assertEquals(67.89, elsePrint.expression.value)
-    }
-
-    @Test
-    fun `parses if statement with else if branch`() {
-        // if (true) { } else if (false) { print(true); }
-        val tokens = listOf(
-            Token(TokenValue.If, 1, 1),
-            Token(TokenValue.BoolLiteral(true), 1, 2),
-            Token(TokenValue.LBrace, 1, 4),
-            Token(TokenValue.RBrace, 1, 1),
-            Token(TokenValue.Else, 1, 2),
-            Token(TokenValue.If, 1, 1),
-            Token(TokenValue.BoolLiteral(false), 1, 2),
-            Token(TokenValue.LBrace, 1, 4),
-            Token(TokenValue.Print(true), 1, 5),
-            Token(TokenValue.NumberLiteral(67.89), 1, 10),
-            Token(TokenValue.Semicolon, 1, 15),
-            Token(TokenValue.RBrace, 1, 1),
-        )
-
-        val parser = Parser(tokens)
-        val stmt = parser.parseStatement()
-
-        assertIs<Statement.If>(stmt)
-        assertEquals(null, stmt.thenBranch)
-        assertIs<Statement.If>(stmt.elseBranch)
-
-        // else if (false) { print(true); }
-        val elseIf = stmt.elseBranch
-        val elseIfBlock = stmt.elseBranch.thenBranch
-        assertNotNull(elseIfBlock)
-        assertEquals(1, elseIfBlock.statements.size)
-
-        val elseIfPrint = elseIfBlock.statements[0]
-        assertIs<Statement.Print>(elseIfPrint)
-        assertIs<Expression.NumberLiteral>(elseIfPrint.expression)
-        assertEquals(67.89, elseIfPrint.expression.value)
+        for (input in inputs) {
+            val stmt = Parser(input.tokens).parseStatement()
+            assertEquals(input.expected, stmt, "Failed to parse if statement ${input.name}")
+        }
     }
 }
