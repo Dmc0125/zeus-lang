@@ -5,7 +5,13 @@ import kotlin.test.*
 class TokenizerTest {
     @Test
     fun `tokenizes input successfully`() {
-        val input = "+-* / :=;print println true false bool! (){}if else"
+        var input = """
+        +-* / :=;print println true false bool! (){}if else
+        != == < <= >>=
+        && ||
+        """
+        input = input.trimIndent()
+
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -28,6 +34,14 @@ class TokenizerTest {
             Token(TokenValue.RBrace, 1, 44),
             Token(TokenValue.If, 1, 45),
             Token(TokenValue.Else, 1, 48),
+            Token(TokenValue.ExclEqual, 2, 1),
+            Token(TokenValue.DoubleEqual, 2, 4),
+            Token(TokenValue.Lt, 2, 7),
+            Token(TokenValue.LtEqual, 2, 9),
+            Token(TokenValue.Gt, 2, 12),
+            Token(TokenValue.GtEqual, 2, 13),
+            Token(TokenValue.DoubleAmp, 3, 1),
+            Token(TokenValue.DoublePipe, 3, 3),
         )
 
         assertTrue(tokens.size == expected.size)

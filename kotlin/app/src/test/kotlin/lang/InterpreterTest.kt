@@ -46,6 +46,24 @@ class InterpreterTest {
     }
 
     @Test
+    fun `interprets logical`() {
+        // (true || false) && true
+        var expr = Expression.Binary(
+            operator = TokenValue.DoubleAmp,
+            left = Expression.Binary(
+                operator = TokenValue.DoublePipe,
+                left = Expression.BoolLiteral(true),
+                right = Expression.BoolLiteral(false),
+            ),
+            right = Expression.BoolLiteral(true),
+        )
+        val interpreter = Interpreter()
+        val result = interpreter.interpretBinary(expr)
+
+        assertEquals(VariableValue.Bool(true), result)
+    }
+
+    @Test
     fun `interprets variable declaration`() {
         val interpreter = Interpreter()
         val stmt = Statement.VariableDeclaration("foo", null, Expression.NumberLiteral(12.0))

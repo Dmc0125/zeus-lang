@@ -126,6 +126,55 @@ class Parser(
         }
     }
 
+    fun parseComparison(): Expression {
+        // comparison => factor (('==' | '!=' | '<' | '>' | '<=' | '>=') factor)*
+
+        var left = this.parseFactor()
+
+        while (true) {
+            val operator = this.peek()
+
+            when (operator?.value) {
+                is TokenValue.DoubleEqual, is TokenValue.ExclEqual,
+                is TokenValue.Lt, is TokenValue.Gt,
+                is TokenValue.LtEqual, is TokenValue.GtEqual -> {
+                    this.idx += 1
+                    val right = this.parseGroup(this::parseFactor)
+                    left = Expression.Binary(
+                        operator = operator.value,
+                        left = left,
+                        right = right,
+                    )
+                }
+
+                else -> return left
+            }
+        }
+    }
+
+    fun parseLogical(): Expression {
+        // logical => comparison (('&&' | '||') comparison)*
+
+        var left = this.parseComparison()
+        while (true) {
+            val operator = this.peek()
+
+            when (operator?.value) {
+                is TokenValue.DoubleAmp, is TokenValue.DoublePipe -> {
+                    this.idx += 1
+                    val right = this.parseComparison()
+                    left = Expression.Binary(
+                        operator = operator.value,
+                        left = left,
+                        right = right,
+                    )
+                }
+
+                else -> return left
+            }
+        }
+    }
+
     fun parseGroup(otherwise: () -> Expression): Expression {
         val left = this.peek() ?: throw UnexpectedEndOfInputError
         return when (left.value) {
@@ -145,8 +194,8 @@ class Parser(
     }
 
     fun parseExpression(): Expression {
-        // expression => '(' factor ')' | factor
-        return this.parseGroup(this::parseFactor)
+        // expression => '(' logical ')' | logical
+        return this.parseGroup(this::parseLogical)
     }
 
     fun parseIdentStatement(ident: TokenValue.Ident): Statement {

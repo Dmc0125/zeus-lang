@@ -11,7 +11,7 @@ I wanted to build a toy language since I've never built one and it seems fun.
 - [x] variables
   - declaration
   - assignment
-- [ ] if
+- [x] if
 - [ ] for
 - [x] print
 - [ ] functions
@@ -21,18 +21,23 @@ I wanted to build a toy language since I've never built one and it seems fun.
 ```
 program := statement*
 
-statement := (variableDeclaration ';')
-           | (variableAssignment ';')
-           | (print ';')
+statement := variableDeclaration ';'
+           | variableAssignment ';'
+           | if ';'
+           | print ';'
+           | block
 
 variableDeclaration := ident ':=' expression
                      | ident ':' type
                      | ident ':' type '=' expression
 variableAssignment  := ident '=' expression
+print               := ('print'  | 'println') expression
+if                  := 'if' expression '{' statement* '}' ('else' if)* ('else' block)?
+block               := '{' statement* '}'
 
-print := ('print'  | 'println') expression
-
-expression := '(' factor ')' | factor
+expression := '(' logical ')' | logical
+logical    := comparison (('&&' | '||') comparison)*
+comparison := factor (('==' | '!=' | '<' | '>' | '<=' | '>=') factor)*
 factor     := term (('+' | '-') term)*
 term       := unary (('*' | '/') unary)*
 unary      := (('+' | '-' | '!') unary) | literal

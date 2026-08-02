@@ -39,20 +39,46 @@ class Analyzer {
         val leftType = this.analyzeExpression(expression.left)
         val rightType = this.analyzeExpression(expression.right)
 
-        if (leftType != VariableType.Number || rightType != VariableType.Number) {
+        if (leftType != rightType) {
             throw RuntimeException(
-                "Invalid operand types: $leftType, $rightType; binary requires both Double"
+                "Invalid operand types: $leftType, $rightType"
             )
         }
 
         return when (expression.operator) {
-            is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Star, is TokenValue.Slash ->
+            is TokenValue.Minus, is TokenValue.Plus,
+            is TokenValue.Star, is TokenValue.Slash -> {
+                check(leftType == VariableType.Number) {
+                    throw RuntimeException(
+                        "Invalid operand types: $leftType, $rightType; binary requires both Double"
+                    )
+                }
                 VariableType.Number
+            }
 
-            else ->
-                throw RuntimeException(
-                    "Invalid operator: ${expression.operator}; binary requires \"-\", \"+\", \"*\", or \"/\""
-                )
+            is TokenValue.Lt, is TokenValue.Gt,
+            is TokenValue.LtEqual, is TokenValue.GtEqual -> {
+                check(leftType == VariableType.Number) {
+                    throw RuntimeException(
+                        "Invalid operand types: $leftType, $rightType; binary requires both Double"
+                    )
+                }
+                VariableType.Bool
+            }
+
+            is TokenValue.DoubleAmp, is TokenValue.DoublePipe -> {
+                check(leftType == VariableType.Bool) {
+                    throw RuntimeException(
+                        "Invalid operand types: $leftType, $rightType; binary requires both Bool"
+                    )
+                }
+                VariableType.Bool
+            }
+
+            is TokenValue.DoubleEqual, is TokenValue.ExclEqual -> VariableType.Bool
+            else -> throw RuntimeException(
+                "Invalid operator: ${expression.operator}"
+            )
         }
     }
 

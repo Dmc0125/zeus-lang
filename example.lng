@@ -34,3 +34,31 @@ if false {
 } else {
     println "else";
 }
+
+if true == true {
+    println "true == true";
+}
+
+if true == false {
+    println "true == false";
+}
+
+if true == true == true {
+    println "true == true == true";
+}
+
+if true == true == false {
+    println "true == true == false";
+}
+
+if "123" == "123" {
+    println "123 == 123";
+}
+
+if true && "123" == "123" {
+    println "true && 123 == 123";
+}
+
+if false || true {
+    println "false || true";
+}

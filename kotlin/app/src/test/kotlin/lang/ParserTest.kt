@@ -267,6 +267,104 @@ class ParserTest {
     }
 
     @Test
+    fun `parses double equal binary`() {
+        // 123.45 == 67.89
+        val tokens = listOf(
+            Token(TokenValue.NumberLiteral(123.45), 1, 1),
+            Token(TokenValue.DoubleEqual, 1, 6),
+            Token(TokenValue.NumberLiteral(67.89), 1, 8)
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.DoubleEqual, expr.operator)
+
+        assertIs<Expression.NumberLiteral>(expr.left)
+        assertEquals(123.45, expr.left.value)
+        assertIs<Expression.NumberLiteral>(expr.right)
+        assertEquals(67.89, expr.right.value)
+    }
+
+    @Test
+    fun `parses bool binary with correct precedence`() {
+        // 123 + 5 == 67 => (123 + 5) == 67
+        val tokens = listOf(
+            Token(TokenValue.NumberLiteral(123.45), 1, 1),
+            Token(TokenValue.Plus, 1, 6),
+            Token(TokenValue.NumberLiteral(5.0), 1, 8),
+            Token(TokenValue.DoubleEqual, 1, 11),
+            Token(TokenValue.NumberLiteral(67.89), 1, 13)
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.DoubleEqual, expr.operator)
+
+        val sum = expr.left
+        assertIs<Expression.Binary>(sum)
+        assertEquals(TokenValue.Plus, sum.operator)
+        assertIs<Expression.NumberLiteral>(sum.left)
+        assertEquals(123.45, sum.left.value)
+        assertIs<Expression.NumberLiteral>(sum.right)
+        assertEquals(5.0, sum.right.value)
+
+        assertIs<Expression.NumberLiteral>(expr.right)
+        assertEquals(67.89, expr.right.value)
+    }
+
+    @Test
+    fun `parses logical binary`() {
+        val tokens = listOf(
+            Token(TokenValue.NumberLiteral(123.45), 1, 1),
+            Token(TokenValue.DoublePipe, 1, 5),
+            Token(TokenValue.NumberLiteral(67.89), 1, 7)
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.DoublePipe, expr.operator)
+        assertIs<Expression.NumberLiteral>(expr.left)
+        assertEquals(123.45, expr.left.value)
+        assertIs<Expression.NumberLiteral>(expr.right)
+        assertEquals(67.89, expr.right.value)
+    }
+
+    @Test
+    fun `parses logical binary with correct precedence`() {
+        // true == false && false => (true == false) && false
+        val tokens = listOf(
+            Token(TokenValue.BoolLiteral(true), 1, 1),
+            Token(TokenValue.DoubleEqual, 1, 5),
+            Token(TokenValue.BoolLiteral(false), 1, 7),
+            Token(TokenValue.DoubleAmp, 1, 8),
+            Token(TokenValue.BoolLiteral(false), 1, 10)
+        )
+
+        val parser = Parser(tokens)
+        val expr = parser.parseExpression()
+
+        assertIs<Expression.Binary>(expr)
+        assertEquals(TokenValue.DoubleAmp, expr.operator)
+
+        assertIs<Expression.Binary>(expr.left)
+        assertEquals(TokenValue.DoubleEqual, expr.left.operator)
+
+        assertIs<Expression.BoolLiteral>(expr.left.left)
+        assertTrue(expr.left.left.value)
+        assertIs<Expression.BoolLiteral>(expr.left.right)
+        assertFalse(expr.left.right.value)
+
+        assertIs<Expression.BoolLiteral>(expr.right)
+        assertFalse(expr.right.value)
+    }
+
+    @Test
     fun `parses variable declaration`() {
         val tokens = listOf(
             Token(TokenValue.Ident("foo"), 1, 1),

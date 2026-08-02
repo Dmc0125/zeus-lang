@@ -22,6 +22,14 @@ sealed interface TokenValue {
     data object Semicolon : TokenValue
     data object Equal : TokenValue
     data object Excl : TokenValue
+    data object DoubleEqual : TokenValue
+    data object ExclEqual : TokenValue
+    data object Lt : TokenValue
+    data object Gt : TokenValue
+    data object LtEqual : TokenValue
+    data object GtEqual : TokenValue
+    data object DoubleAmp : TokenValue
+    data object DoublePipe : TokenValue
 
     data object LParen : TokenValue
     data object RParen : TokenValue
@@ -34,6 +42,15 @@ sealed interface TokenValue {
     data class Type(val type: VariableType) : TokenValue
     data object If : TokenValue
     data object Else : TokenValue
+
+    fun comparison(): Boolean =
+        when (this) {
+            is DoubleEqual, is ExclEqual,
+            is Lt, is Gt,
+            is LtEqual, is GtEqual -> true
+
+            else -> false
+        }
 }
 
 data class Token(
@@ -49,9 +66,9 @@ fun tokenizerRun(input: String): List<Token> {
     var col = 1
     var idx = 0
 
-    fun peek(): Char? {
-        if (idx >= input.length) return null
-        return input[idx]
+    fun peek(n: Int = 0): Char? {
+        if (idx + n >= input.length) return null
+        return input[idx + n]
     }
 
     fun isNumeric(ch: Char): Boolean {
@@ -60,6 +77,16 @@ fun tokenizerRun(input: String): List<Token> {
 
     fun isAlpha(ch: Char): Boolean {
         return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
+    }
+
+    fun doubleChar(next: Char, single: TokenValue, double: TokenValue) {
+        if (peek(1) == next) {
+            idx += 1
+            tokens.add(Token(double, line, col))
+            col += 1
+        } else {
+            tokens.add(Token(single, line, col))
+        }
     }
 
     while (idx < input.length) {
@@ -85,13 +112,32 @@ fun tokenizerRun(input: String): List<Token> {
             '*' -> tokens.add(Token(TokenValue.Star, line, col))
             '/' -> tokens.add(Token(TokenValue.Slash, line, col))
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
-            '=' -> tokens.add(Token(TokenValue.Equal, line, col))
             ':' -> tokens.add(Token(TokenValue.Colon, line, col))
-            '!' -> tokens.add(Token(TokenValue.Excl, line, col))
             '(' -> tokens.add(Token(TokenValue.LParen, line, col))
             ')' -> tokens.add(Token(TokenValue.RParen, line, col))
             '{' -> tokens.add(Token(TokenValue.LBrace, line, col))
             '}' -> tokens.add(Token(TokenValue.RBrace, line, col))
+            '=' -> doubleChar('=', TokenValue.Equal, TokenValue.DoubleEqual)
+            '!' -> doubleChar('=', TokenValue.Excl, TokenValue.ExclEqual)
+            '<' -> doubleChar('=', TokenValue.Lt, TokenValue.LtEqual)
+            '>' -> doubleChar('=', TokenValue.Gt, TokenValue.GtEqual)
+            '&' -> {
+                idx += 1
+                if (peek() == '&') {
+                    tokens.add(Token(TokenValue.DoubleAmp, line, col))
+                    col += 1
+                    continue
+                }
+            }
+
+            '|' -> {
+                idx += 1
+                if (peek() == '|') {
+                    tokens.add(Token(TokenValue.DoublePipe, line, col))
+                    col += 1
+                    continue
+                }
+            }
 
             '"' -> {
                 idx += 1

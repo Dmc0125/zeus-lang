@@ -73,19 +73,69 @@ class Interpreter(
     }
 
     fun interpretBinary(expression: Expression.Binary): VariableValue {
-        val left = interpretExpression(expression.left) as VariableValue.Number
-        val right = interpretExpression(expression.right) as VariableValue.Number
-
-        return when (expression.operator) {
-            TokenValue.Plus -> VariableValue.Number(left.value + right.value)
-            TokenValue.Minus -> VariableValue.Number(left.value - right.value)
-            TokenValue.Star -> VariableValue.Number(left.value * right.value)
-            TokenValue.Slash -> {
-                check(right.value != 0.0) { throw RuntimeException("Division by zero") }
-                VariableValue.Number(left.value / right.value)
+        when (expression.operator) {
+            is TokenValue.DoubleAmp -> {
+                val left = interpretExpression(expression.left) as VariableValue.Bool
+                if (!left.value) {
+                    return VariableValue.Bool(false)
+                }
+                return interpretExpression(expression.right)
             }
 
-            else -> throw RuntimeException("Unreachable")
+            is TokenValue.DoublePipe -> {
+                val left = interpretExpression(expression.left) as VariableValue.Bool
+                if (left.value) {
+                    return VariableValue.Bool(true)
+                }
+                return this.interpretExpression(expression.right)
+            }
+
+            else -> {
+                val left = interpretExpression(expression.left)
+                var right = interpretExpression(expression.right)
+
+                return when (left) {
+                    is VariableValue.Number -> {
+                        right = right as VariableValue.Number
+                        when (expression.operator) {
+                            TokenValue.Plus -> VariableValue.Number(left.value + right.value)
+                            TokenValue.Minus -> VariableValue.Number(left.value - right.value)
+                            TokenValue.Star -> VariableValue.Number(left.value * right.value)
+                            TokenValue.Slash -> {
+                                check(right.value != 0.0) { throw RuntimeException("Division by zero") }
+                                VariableValue.Number(left.value / right.value)
+                            }
+
+                            TokenValue.Lt -> VariableValue.Bool(left.value < right.value)
+                            TokenValue.Gt -> VariableValue.Bool(left.value > right.value)
+                            TokenValue.LtEqual -> VariableValue.Bool(left.value <= right.value)
+                            TokenValue.GtEqual -> VariableValue.Bool(left.value >= right.value)
+                            TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
+                            TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
+
+                            else -> throw RuntimeException("Invalid operator")
+                        }
+                    }
+
+                    is VariableValue.String -> {
+                        right = right as VariableValue.String
+                        when (expression.operator) {
+                            TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
+                            TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
+                            else -> throw RuntimeException("Invalid operator for string comparison")
+                        }
+                    }
+
+                    is VariableValue.Bool -> {
+                        right = right as VariableValue.Bool
+                        when (expression.operator) {
+                            TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
+                            TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
+                            else -> throw RuntimeException("Invalid operator for boolean comparison")
+                        }
+                    }
+                }
+            }
         }
     }
 

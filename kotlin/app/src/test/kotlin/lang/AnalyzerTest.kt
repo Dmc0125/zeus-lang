@@ -61,15 +61,29 @@ class AnalyzerTest {
 
     @Test
     fun `throws at invalid binary type`() {
-        val b = Expression.Binary(
-            TokenValue.Plus,
-            Expression.StringLiteral("123"),
-            Expression.NumberLiteral(123.0),
+        val binaries = listOf(
+            Expression.Binary(
+                TokenValue.Plus,
+                Expression.StringLiteral("123"),
+                Expression.NumberLiteral(123.0),
+            ),
+            Expression.Binary(
+                TokenValue.DoubleEqual,
+                Expression.BoolLiteral(true),
+                Expression.StringLiteral("123"),
+            ),
+            Expression.Binary(
+                TokenValue.Plus,
+                Expression.StringLiteral("222"),
+                Expression.StringLiteral("123"),
+            ),
         )
-        val analyzer = Analyzer()
 
-        assertFailsWith(RuntimeException::class) {
-            analyzer.analyzeBinary(b)
+        for (b in binaries) {
+            val analyzer = Analyzer()
+            assertFailsWith(RuntimeException::class) {
+                analyzer.analyzeBinary(b)
+            }
         }
     }
 
