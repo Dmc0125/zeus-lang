@@ -42,15 +42,6 @@ sealed interface TokenValue {
     data class Type(val type: VariableType) : TokenValue
     data object If : TokenValue
     data object Else : TokenValue
-
-    fun comparison(): Boolean =
-        when (this) {
-            is DoubleEqual, is ExclEqual,
-            is Lt, is Gt,
-            is LtEqual, is GtEqual -> true
-
-            else -> false
-        }
 }
 
 data class Token(
@@ -146,9 +137,13 @@ fun tokenizerRun(input: String): List<Token> {
                 val startCol = col
                 col += 1
 
+                // TODO: Can not have new lines
+
                 while (true) {
                     val next = peek()
-                    check(next != null) { throw UnterminatedStringError(line, startCol) }
+                    check(next != null) {
+                        throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnterminatedString)
+                    }
 
                     if (next == '"') {
                         break
@@ -184,7 +179,7 @@ fun tokenizerRun(input: String): List<Token> {
                         val value = valueStr.toDouble()
                         tokens.add(Token(TokenValue.NumberLiteral(value), line, startCol))
                     } catch (e: NumberFormatException) {
-                        throw SyntaxError(line, col, "Invalid number: ${valueStr}")
+                        throw LangError(line, startCol, ErrorType.Syntax, ErrorMessage.InvalidNumber)
                     }
                     continue
                 }
@@ -223,7 +218,7 @@ fun tokenizerRun(input: String): List<Token> {
                     continue
                 }
 
-                throw SyntaxError(line, col, "Unexpected token: ${ch}")
+                throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
             }
         }
 

@@ -9,6 +9,8 @@ println y;
 t: bool;
 t = !true;
 
+t = "123";
+
 println t;
 
 println "before true";

@@ -98,12 +98,13 @@ class TokenizerTest {
     }
 
     @Test
-    fun `throws UnterminatedStringError on unterminated string`() {
+    fun `throws on unterminated string`() {
         val input = "\"hello"
-        val expection = assertFailsWith(UnterminatedStringError::class) {
+        val exception = assertFailsWith(LangError::class) {
             tokenizerRun(input)
         }
-        assertEquals("Syntax error at 1:1: Unterminated string", expection.message)
+        val expected = LangError(1, 7, ErrorType.Syntax, ErrorMessage.UnterminatedString)
+        assertEquals(expected, exception)
     }
 
     @Test
@@ -116,20 +117,22 @@ class TokenizerTest {
     }
 
     @Test
-    fun `throws SyntaxError on invalid number`() {
+    fun `throws on invalid number`() {
         val input = "123.45.67"
-        val expection = assertFailsWith(SyntaxError::class) {
+        val exception = assertFailsWith(LangError::class) {
             tokenizerRun(input)
         }
-        assertEquals("Syntax error at 1:10: Invalid number: 123.45.67", expection.message)
+        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.InvalidNumber)
+        assertEquals(expected, exception)
     }
 
     @Test
-    fun `throws SyntaxError on unexpected character`() {
+    fun `throws on unexpected character`() {
         val input = "@"
-        val expection = assertFailsWith(SyntaxError::class) {
+        val exception = assertFailsWith(LangError::class) {
             tokenizerRun(input)
         }
-        assertEquals("Syntax error at 1:1: Unexpected token: @", expection.message)
+        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
+        assertEquals(expected, exception)
     }
 }

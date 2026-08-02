@@ -15,24 +15,33 @@ class Analyzer {
             VariableType.Number -> {
                 when (unary.operator) {
                     is TokenValue.Minus, is TokenValue.Plus -> type
-                    else ->
-                        throw RuntimeException(
-                            "Invalid operator: ${unary.operator}; unary requires \"-\" or \"+\""
-                        )
+                    else -> throw LangError(
+                        expression.line,
+                        expression.col,
+                        ErrorType.Syntax,
+                        "Invalid operator; expected \"-\" or \"+\""
+                    )
                 }
             }
 
             VariableType.Bool -> {
                 when (unary.operator) {
                     is TokenValue.Excl -> type
-                    else ->
-                        throw RuntimeException(
-                            "Invalid operator: ${unary.operator}; unary requires \"!\""
-                        )
+                    else -> throw LangError(
+                        expression.line,
+                        expression.col,
+                        ErrorType.Syntax,
+                        "Invalid operator; expected \"!\""
+                    )
                 }
             }
 
-            else -> throw RuntimeException("Invalid operand type: $type; unary requires Double")
+            else -> throw LangError(
+                expression.line,
+                expression.col,
+                ErrorType.Syntax,
+                "Invalid operand; expected number or bool"
+            )
         }
     }
 
@@ -42,8 +51,11 @@ class Analyzer {
         val rightType = this.analyzeExpression(binary.right)
 
         if (leftType != rightType) {
-            throw RuntimeException(
-                "Invalid operand types: $leftType, $rightType"
+            throw LangError(
+                expression.line,
+                expression.col,
+                ErrorType.Type,
+                "Types mismatch: $leftType != $rightType"
             )
         }
 
@@ -51,8 +63,11 @@ class Analyzer {
             is TokenValue.Minus, is TokenValue.Plus,
             is TokenValue.Star, is TokenValue.Slash -> {
                 check(leftType == VariableType.Number) {
-                    throw RuntimeException(
-                        "Invalid operand types: $leftType, $rightType; binary requires both Double"
+                    throw LangError(
+                        expression.line,
+                        expression.col,
+                        ErrorType.Type,
+                        "Types mismatch: $leftType != $rightType; expected numbers"
                     )
                 }
                 VariableType.Number
@@ -61,8 +76,11 @@ class Analyzer {
             is TokenValue.Lt, is TokenValue.Gt,
             is TokenValue.LtEqual, is TokenValue.GtEqual -> {
                 check(leftType == VariableType.Number) {
-                    throw RuntimeException(
-                        "Invalid operand types: $leftType, $rightType; binary requires both Double"
+                    throw LangError(
+                        expression.line,
+                        expression.col,
+                        ErrorType.Type,
+                        "Types mismatch: $leftType != $rightType; expected numbers"
                     )
                 }
                 VariableType.Bool
@@ -70,16 +88,23 @@ class Analyzer {
 
             is TokenValue.DoubleAmp, is TokenValue.DoublePipe -> {
                 check(leftType == VariableType.Bool) {
-                    throw RuntimeException(
-                        "Invalid operand types: $leftType, $rightType; binary requires both Bool"
+                    throw LangError(
+                        expression.line,
+                        expression.col,
+                        ErrorType.Type,
+                        "Types mismatch: $leftType != $rightType; expected bools"
                     )
                 }
                 VariableType.Bool
             }
 
             is TokenValue.DoubleEqual, is TokenValue.ExclEqual -> VariableType.Bool
-            else -> throw RuntimeException(
-                "Invalid operator: ${binary.operator}"
+
+            else -> throw LangError(
+                expression.line,
+                expression.col,
+                ErrorType.Type,
+                "Invalid operator"
             )
         }
     }
@@ -93,7 +118,12 @@ class Analyzer {
                         return scope.variables[ident.name]!!
                     }
                 }
-                throw RuntimeException("Undefined variable: ${ident.name}")
+                throw LangError(
+                    expression.line,
+                    expression.col,
+                    ErrorType.Type,
+                    ErrorMessage.UndefinedVariable
+                )
             }
 
             is ExpressionType.NumberLiteral -> VariableType.Number
@@ -104,66 +134,86 @@ class Analyzer {
         }
     }
 
-    fun analyzeStatement(statement: Statement) {
-        when (statement) {
+    fun analyzeStatement(stmt: Statement) {
+        when (stmt.type) {
             is StatementType.VariableDeclaration -> {
+                val decl = stmt.type
                 val scope = this.stack[this.stack.size - 1]
 
-                if (scope.variables.containsKey(statement.name)) {
-                    throw RuntimeException("Variable already declared: ${statement.name}")
+                if (scope.variables.containsKey(decl.name)) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.VariableAlreadyDefined)
                 }
 
-                if (statement.value == null) {
-                    check(statement.type != null) {
-                        throw RuntimeException("Type not specified for variable: ${statement.name}")
+                if (decl.value == null) {
+                    check(decl.type != null) {
+                        throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.TypeNotSpecified)
                     }
-                    scope.variables[statement.name] = statement.type
+                    scope.variables[decl.name] = decl.type
                 } else {
-                    val valueType = this.analyzeExpression(statement.value)
-                    if (statement.type != null) {
-                        check(statement.type == valueType) {
-                            throw RuntimeException("Type mismatch: ${statement.name}")
+                    val valueType = this.analyzeExpression(decl.value)
+                    if (decl.type != null) {
+                        check(decl.type == valueType) {
+                            throw LangError(
+                                stmt.line, stmt.col, ErrorType.Type,
+                                "Type mismatch: ${decl.type} != ${valueType}",
+                            )
                         }
                     }
-                    scope.variables[statement.name] = valueType
+                    scope.variables[decl.name] = valueType
                 }
             }
 
             is StatementType.VariableAssignment -> {
+                val assignment = stmt.type
                 var found = false
                 for (scope in this.stack) {
-                    if (scope.variables.containsKey(statement.name)) {
-                        val variableType = scope.variables[statement.name]
-                        val valueType = this.analyzeExpression(statement.value)
+                    if (scope.variables.containsKey(assignment.name)) {
+                        val variableType = scope.variables[assignment.name]
+                        val valueType = this.analyzeExpression(assignment.value)
                         check(variableType == valueType) {
-                            throw RuntimeException("Type mismatch: ${statement.name}")
+                            throw LangError(
+                                stmt.line, stmt.col, ErrorType.Type,
+                                "Type mismatch: ${variableType} != ${valueType}",
+                            )
                         }
                         found = true
                     }
                 }
-                check(found) { throw RuntimeException("Undefined variablel: ${statement.name}") }
+                check(found) {
+                    throw LangError(
+                        stmt.line,
+                        stmt.col,
+                        ErrorType.Type,
+                        ErrorMessage.UndefinedVariable
+                    )
+                }
             }
 
-            is StatementType.Print -> this.analyzeExpression(statement.expression)
+            is StatementType.Print -> this.analyzeExpression(stmt.type.expression)
             is StatementType.Block -> {
                 this.stack.add(AnalyzerScope())
-                for (statement in statement.statements) {
+                for (statement in stmt.type.statements) {
                     this.analyzeStatement(statement)
                 }
                 this.stack.removeAt(this.stack.size - 1)
             }
 
             is StatementType.If -> {
-                val conditionType = this.analyzeExpression(statement.condition)
+                val conditionType = this.analyzeExpression(stmt.type.condition)
                 check(conditionType == VariableType.Bool) {
-                    throw RuntimeException("Condition must be a boolean")
+                    throw LangError(
+                        stmt.type.condition.line,
+                        stmt.type.condition.col,
+                        ErrorType.Type,
+                        ErrorMessage.ConditionMustBeBoolean,
+                    )
                 }
 
-                if (statement.thenBranch != null) {
-                    this.analyzeStatement(statement.thenBranch)
+                if (stmt.type.thenBranch != null) {
+                    this.analyzeStatement(stmt.type.thenBranch)
                 }
-                if (statement.elseBranch != null) {
-                    this.analyzeStatement(statement.elseBranch)
+                if (stmt.type.elseBranch != null) {
+                    this.analyzeStatement(stmt.type.elseBranch)
                 }
             }
         }

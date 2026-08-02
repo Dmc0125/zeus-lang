@@ -45,13 +45,24 @@ class Parser(
         return if (idx + offset < tokens.size) tokens[idx + offset] else null
     }
 
-    fun parseLiteral(): Expression {
-        // literal => number | ident | string | bool
-
+    fun peekOrThrow(): Token {
         val token = this.peek()
-        check(token != null) {
-            throw UnexpectedEndOfInputError
+        if (token != null) {
+            return token
         }
+        val current = this.tokens[this.idx - 1]
+        throw LangError(
+            current.line,
+            current.col,
+            ErrorType.Syntax,
+            ErrorMessage.UnexpectedEndOfInput,
+        )
+    }
+
+    fun parsePrimary(): Expression {
+        // primary => number | ident | string | bool | '(' expression ')'
+
+        val token = this.peekOrThrow()
 
         return when (token.value) {
             is TokenValue.NumberLiteral -> {
@@ -74,24 +85,40 @@ class Parser(
                 Expression(ExpressionType.BoolLiteral(token.value.value), token)
             }
 
-            else -> {
-                throw UnexpectedTokenError(token.line, token.col, "${token.value}", "number or variable")
+            is TokenValue.LParen -> {
+                this.idx += 1
+                val expr = this.parseExpression()
+                val rparen = this.peekOrThrow()
+                check(rparen.value == TokenValue.RParen) {
+                    throw LangError(
+                        rparen.line,
+                        rparen.col,
+                        ErrorType.Syntax,
+                        "Expected ')'",
+                    )
+                }
+                this.idx += 1
+                expr
             }
+
+            else -> throw LangError(
+                token.line,
+                token.col,
+                ErrorType.Syntax,
+                "Expected ident, string, bool, or number literal"
+            )
         }
     }
 
     fun parseUnary(): Expression {
         // unary => ('-' | '+' | '!' unary) | literal
 
-        val token = this.peek()
-        check(token != null) {
-            throw UnexpectedEndOfInputError
-        }
+        val token = this.peekOrThrow()
 
         return when (token.value) {
             is TokenValue.Minus, is TokenValue.Plus, is TokenValue.Excl -> {
                 this.idx += 1
-                val operand = this.parseGroup(this::parseUnary)
+                val operand = this.parseUnary()
                 Expression(
                     ExpressionType.Unary(
                         operator = token.value,
@@ -101,7 +128,7 @@ class Parser(
                 )
             }
 
-            else -> this.parseLiteral()
+            else -> this.parsePrimary()
         }
     }
 
@@ -114,9 +141,9 @@ class Parser(
             val operator = this.peek()
 
             when (operator?.value) {
-                is TokenValue.Star, TokenValue.Slash -> {
+                TokenValue.Star, TokenValue.Slash -> {
                     this.idx += 1
-                    val right = this.parseGroup(this::parseUnary)
+                    val right = this.parseUnary()
                     left = Expression(
                         ExpressionType.Binary(operator = operator.value, left = left, right = right),
                         left.line,
@@ -140,7 +167,7 @@ class Parser(
             when (operator?.value) {
                 is TokenValue.Plus, is TokenValue.Minus -> {
                     this.idx += 1
-                    val right = this.parseGroup(this::parseTerm)
+                    val right = this.parseTerm()
                     left = Expression(
                         ExpressionType.Binary(operator = operator.value, left = left, right = right),
                         left.line,
@@ -166,7 +193,7 @@ class Parser(
                 is TokenValue.Lt, is TokenValue.Gt,
                 is TokenValue.LtEqual, is TokenValue.GtEqual -> {
                     this.idx += 1
-                    val right = this.parseGroup(this::parseFactor)
+                    val right = this.parseFactor()
                     left = Expression(
                         ExpressionType.Binary(operator = operator.value, left = left, right = right),
                         left.line,
@@ -179,10 +206,11 @@ class Parser(
         }
     }
 
-    fun parseLogical(): Expression {
+    fun parseExpression(): Expression {
         // logical => comparison (('&&' | '||') comparison)*
 
         var left = this.parseComparison()
+
         while (true) {
             val operator = this.peek()
 
@@ -202,29 +230,6 @@ class Parser(
         }
     }
 
-    fun parseGroup(otherwise: () -> Expression): Expression {
-        val left = this.peek() ?: throw UnexpectedEndOfInputError
-        return when (left.value) {
-            is TokenValue.LParen -> {
-                this.idx += 1
-                val expr = this.parseExpression()
-                val rparen = this.peek() ?: throw UnexpectedEndOfInputError
-                check(rparen.value == TokenValue.RParen) {
-                    throw UnexpectedTokenError(rparen.line, rparen.col, "")
-                }
-                this.idx += 1
-                expr
-            }
-
-            else -> otherwise()
-        }
-    }
-
-    fun parseExpression(): Expression {
-        // expression => '(' logical ')' | logical
-        return this.parseGroup(this::parseLogical)
-    }
-
     fun parseIdentStatement(identToken: Token): Statement {
         // identStatement => variableDeclaration | variableAssignment
         // variableDeclaration => ident ':=' expression | ident ':' type | ident ':' type '=' expression
@@ -233,12 +238,12 @@ class Parser(
         val ident = identToken.value as TokenValue.Ident
 
         this.idx += 1
-        val next = this.peek() ?: throw UnexpectedEndOfInputError
+        val next = this.peekOrThrow()
 
         val stmtType = when (next.value) {
             is TokenValue.Colon -> {
                 this.idx += 1
-                val type = this.peek() ?: throw UnexpectedEndOfInputError
+                val type = this.peekOrThrow()
 
                 when (type.value) {
                     is TokenValue.Equal -> {
@@ -255,7 +260,7 @@ class Parser(
                         this.idx += 1
                         val variableType = type.value.type
 
-                        val equal = this.peek() ?: throw UnexpectedEndOfInputError
+                        val equal = this.peekOrThrow()
                         if (equal.value == TokenValue.Equal) {
                             this.idx += 1
                             val value = this.parseExpression()
@@ -273,7 +278,12 @@ class Parser(
                         }
                     }
 
-                    else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}")
+                    else -> throw LangError(
+                        type.line,
+                        type.col,
+                        ErrorType.Syntax,
+                        "Expected type or '='",
+                    )
                 }
             }
 
@@ -286,7 +296,12 @@ class Parser(
                 )
             }
 
-            else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}")
+            else -> throw LangError(
+                next.line,
+                next.col,
+                ErrorType.Syntax,
+                "Expected variable declaration or assignment",
+            )
         }
 
         return Statement(stmtType, identToken.line, identToken.col)
@@ -300,7 +315,7 @@ class Parser(
         val statements = mutableListOf<Statement>()
 
         while (true) {
-            val next = this.peek() ?: throw UnexpectedEndOfInputError
+            val next = this.peekOrThrow()
 
             if (next.value == TokenValue.RBrace) {
                 break
@@ -333,9 +348,9 @@ class Parser(
 
         val cond = this.parseExpression()
 
-        val lBrace = this.peek() ?: throw UnexpectedEndOfInputError
+        val lBrace = this.peekOrThrow()
         check(lBrace.value == TokenValue.LBrace) {
-            throw UnexpectedTokenError(lBrace.line, lBrace.col, "${lBrace.value}", "LBrace")
+            throw LangError(lBrace.line, lBrace.col, ErrorType.Syntax, "Expected block")
         }
 
         val thenBranch = this.parseBlockStatement(lBrace)
@@ -345,11 +360,11 @@ class Parser(
 
         if (elseToken?.value == TokenValue.Else) {
             this.idx += 1
-            val next = this.peek() ?: throw UnexpectedEndOfInputError
+            val next = this.peekOrThrow()
             elseBranch = when (next.value) {
                 is TokenValue.If -> this.parseIfStatement(next)
                 is TokenValue.LBrace -> this.parseBlockStatement(next)
-                else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "LBrace or If")
+                else -> throw LangError(next.line, next.col, ErrorType.Syntax, "Expected block or if statement")
             }
         }
 
@@ -367,8 +382,7 @@ class Parser(
     fun parseStatement(): Statement? {
         // statement => variableDeclaration | print
 
-        val next = this.peek()
-        check(next != null) { throw UnexpectedEndOfInputError }
+        val next = this.peekOrThrow()
 
         val (statement, requiresSemicolon) = when (next.value) {
             is TokenValue.Ident -> Pair(this.parseIdentStatement(next), true)
@@ -386,15 +400,19 @@ class Parser(
             is TokenValue.LBrace -> Pair(this.parseBlockStatement(next), false)
             is TokenValue.If -> Pair(this.parseIfStatement(next), false)
 
-            else -> throw UnexpectedTokenError(next.line, next.col, "${next.value}", "identifier or print")
+            else -> throw LangError(
+                next.line,
+                next.col,
+                ErrorType.Syntax,
+                "Expected identifier or block, if or print statement"
+            )
         }
 
         if (requiresSemicolon) {
             val semicolon = this.peek()
-            check(semicolon != null) { throw UnexpectedEndOfInputError }
-            check(semicolon.value is TokenValue.Semicolon) {
-                // TODO: tokenValue.toString()
-                throw UnexpectedTokenError(semicolon.line, semicolon.col, "${semicolon.value}", ";")
+            check(semicolon != null && semicolon.value == TokenValue.Semicolon) {
+                val cur = this.tokens[this.idx - 1]
+                throw LangError(cur.line, cur.col, ErrorType.Syntax, "Expected ';'")
             }
             this.idx += 1
         }

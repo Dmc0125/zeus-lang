@@ -20,12 +20,15 @@ fun main(args: Array<String>) {
             val line = readLine() ?: break
             if (line == "exit") break
 
-            val tokens = tokenizerRun(line)
-            val parser = Parser(tokens)
-            val statements = parser.parseProgram()
+            try {
+                val tokens = tokenizerRun(line)
+                val statements = Parser(tokens).parseProgram()
 
-            analyzer.analyzeProgram(statements)
-            interpreter.interpretProgram(statements)
+                analyzer.analyzeProgram(statements)
+                interpreter.interpretProgram(statements)
+            } catch (e: LangError) {
+                println(e.construct(line))
+            }
 
             val flushed = printer.sb.length > 0
             printer.flush()
@@ -44,20 +47,23 @@ fun main(args: Array<String>) {
         }
 
         val file = Path.of(filepath)
-        val text = file.readText()
-
-        // TODO: handle exceptions
-
-        val tokens = tokenizerRun(text)
-        val parser = Parser(tokens)
-        val statements = parser.parseProgram()
-
-        val analyzer = Analyzer()
-        analyzer.analyzeProgram(statements)
-
+        val source = file.readText()
         val printer = BufferedPrinter()
-        val interpreter = Interpreter(printer)
-        interpreter.interpretProgram(statements)
+
+        try {
+            val tokens = tokenizerRun(source)
+            val parser = Parser(tokens)
+            val statements = parser.parseProgram()
+
+            val analyzer = Analyzer()
+            analyzer.analyzeProgram(statements)
+
+            val interpreter = Interpreter(printer)
+            interpreter.interpretProgram(statements)
+        } catch (e: LangError) {
+            println(e.construct(source))
+        }
+
         printer.flush()
     }
 }

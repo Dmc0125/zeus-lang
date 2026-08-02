@@ -104,7 +104,14 @@ class Interpreter(
                             TokenValue.Minus -> VariableValue.Number(left.value - right.value)
                             TokenValue.Star -> VariableValue.Number(left.value * right.value)
                             TokenValue.Slash -> {
-                                check(right.value != 0.0) { throw RuntimeException("Division by zero") }
+                                check(right.value != 0.0) {
+                                    throw LangError(
+                                        expression.col,
+                                        expression.line,
+                                        ErrorType.Runtime,
+                                        ErrorMessage.DivisionByZero,
+                                    )
+                                }
                                 VariableValue.Number(left.value / right.value)
                             }
 
@@ -124,7 +131,7 @@ class Interpreter(
                         when (binary.operator) {
                             TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
                             TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
-                            else -> throw RuntimeException("Invalid operator for string comparison")
+                            else -> throw RuntimeException("Unreachable: Invalid operator for string comparison")
                         }
                     }
 
@@ -133,7 +140,7 @@ class Interpreter(
                         when (binary.operator) {
                             TokenValue.DoubleEqual -> VariableValue.Bool(left.value == right.value)
                             TokenValue.ExclEqual -> VariableValue.Bool(left.value != right.value)
-                            else -> throw RuntimeException("Invalid operator for boolean comparison")
+                            else -> throw RuntimeException("Unreachable: Invalid operator for boolean comparison")
                         }
                     }
                 }
@@ -150,7 +157,7 @@ class Interpreter(
                         return scope[ident.name]!!
                     }
                 }
-                throw RuntimeException("Unreachable")
+                throw RuntimeException("Unreachable: variable undefined: ${ident.name}")
             }
 
             is ExpressionType.NumberLiteral -> VariableValue.Number(expression.type.value)
@@ -181,7 +188,7 @@ class Interpreter(
                         return
                     }
                 }
-                throw RuntimeException("Ureachable")
+                throw RuntimeException("Unreachable: variable undefined: ${assign.name}")
             }
 
             is StatementType.Print -> {
@@ -208,7 +215,7 @@ class Interpreter(
                 val ifStmt = statement.type
                 var condition = this.interpretExpression(ifStmt.condition)
                 assert(condition is VariableValue.Bool) {
-                    throw RuntimeException("Condition must be a boolean")
+                    throw RuntimeException("Unreachable: Condition must be a boolean")
                 }
                 condition = condition as VariableValue.Bool
 

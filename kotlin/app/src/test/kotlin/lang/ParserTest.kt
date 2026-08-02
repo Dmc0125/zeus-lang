@@ -209,12 +209,30 @@ class ParserTest {
                 ),
                 num(22.0, 1, 3),
             ),
+            // group followed by binary
+            // (22.0) + 3.0 => 22.0 + 3.0
+            Input(
+                "(22.0) + 3.0",
+                listOf(
+                    Token(TokenValue.LParen, 1, 1),
+                    Token(TokenValue.NumberLiteral(22.0), 1, 2),
+                    Token(TokenValue.RParen, 1, 3),
+                    Token(TokenValue.Plus, 1, 4),
+                    Token(TokenValue.NumberLiteral(3.0), 1, 5),
+                ),
+                binary(TokenValue.Plus, num(22.0, 1, 2), num(3.0, 1, 5), 1, 2)
+            ),
         )
 
         for (input in inputs) {
+            println("Starting test: ${input.name}")
             val parser = Parser(input.tokens)
-            val expr = parser.parseExpression()
-            assertEquals(input.expected, expr, input.name)
+            try {
+                val expr = parser.parseExpression()
+                assertEquals(input.expected, expr, input.name)
+            } catch (e: LangError) {
+                fail("Unexpected exception: ${input.name}", e)
+            }
         }
     }
 

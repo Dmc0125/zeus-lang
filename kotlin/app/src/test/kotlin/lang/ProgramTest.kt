@@ -7,7 +7,7 @@ class ProgramTest {
     fun `interprets program with if`() {
         val program = """
             name := "Ada";
-            age: int = 36;
+            age: number = 36;
             active: bool = true;
 
             println "Starting program";
@@ -26,18 +26,23 @@ class ProgramTest {
                 println score;
             }
         """
-        val tokens = tokenizerRun(program)
-        val parser = Parser(tokens)
-        val ast = parser.parseProgram()
-        val analyzer = Analyzer()
-        analyzer.analyzeProgram(ast)
 
-        val printer = BufferedPrinter()
-        val interpreter = Interpreter(printer)
-        interpreter.interpretProgram(ast)
+        try {
+            val tokens = tokenizerRun(program)
+            val parser = Parser(tokens)
+            val ast = parser.parseProgram()
+            val analyzer = Analyzer()
+            analyzer.analyzeProgram(ast)
 
-        val expectedOutput = "Starting program\nAda is an adult\n82"
-        val output = printer.sb.toString()
-        assertEquals(expectedOutput, output)
+            val printer = BufferedPrinter()
+            val interpreter = Interpreter(printer)
+            interpreter.interpretProgram(ast)
+
+            val expectedOutput = "Starting program\nAda is an adult\n82.0\n"
+            val output = printer.sb.toString()
+            assertEquals(expectedOutput, output)
+        } catch (e: LangError) {
+            fail("Unexpected exception: ${e.construct(program)}")
+        }
     }
 }
