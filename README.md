@@ -23,26 +23,31 @@ program := statement*
 
 statement := variableDeclaration ';'
            | variableAssignment ';'
-           | if ';'
            | print ';'
            | block
+           | if
+           | for
 
 variableDeclaration := ident ':=' expression
                      | ident ':' type
                      | ident ':' type '=' expression
 variableAssignment  := ident '=' expression
 print               := ('print'  | 'println') expression
-if                  := 'if' expression '{' statement* '}' ('else' if)* ('else' block)?
-block               := '{' statement* '}'
+type                := 'number' | 'string' | 'bool'
 
-expression := '(' logical ')' | logical
-logical    := comparison (('&&' | '||') comparison)*
+block               := '{' statement* '}'
+if                  := 'if' expression block ('else' if)* ('else' block)?
+for                 := 'for' expression block
+                     | 'for' variableDeclaration? ';' expression? ';' variableAssignment? block
+
+expression := comparison (('&&' | '||') comparison)*
 comparison := factor (('==' | '!=' | '<' | '>' | '<=' | '>=') factor)*
 factor     := term (('+' | '-') term)*
 term       := unary (('*' | '/') unary)*
-unary      := (('+' | '-' | '!') unary) | literal
-literal    := number
+unary      := (('+' | '-' | '!') unary) | primary
+primary    := number
             | string
             | bool
             | ident
+            | '(' expression ')'
 ```

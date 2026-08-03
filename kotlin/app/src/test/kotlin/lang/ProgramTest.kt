@@ -45,4 +45,65 @@ class ProgramTest {
             fail("Unexpected exception: ${e.construct(program)}")
         }
     }
+
+    @Test
+    fun `interprets program with for`() {
+        val program = """
+            limit := 10;
+            sum := 0;
+            i := 1;
+
+            for i <= limit {
+                if i == 5 {
+                    println "Skipping 5";
+                } else {
+                    sum = sum + i;
+                    print "Added a number";
+                }
+
+                i = i + 1;
+            }
+
+            println sum;
+        """
+
+        try {
+            val tokens = tokenizerRun(program)
+            val ast = Parser(tokens).parseProgram()
+
+            val printer = BufferedPrinter()
+            val analyzer = Analyzer()
+            val interpreter = Interpreter(printer)
+
+            analyzer.analyzeProgram(ast)
+            interpreter.interpretProgram(ast)
+
+            val output = printer.sb.toString()
+
+            var sum: Double = 0.0
+            for (i in 1..10) {
+                if (i != 5) {
+                    sum += i.toDouble()
+                }
+            }
+
+            val expectedOutput = buildString {
+                append("Added a number")
+                append("Added a number")
+                append("Added a number")
+                append("Added a number")
+                appendLine("Skipping 5")
+                append("Added a number")
+                append("Added a number")
+                append("Added a number")
+                append("Added a number")
+                append("Added a number")
+                appendLine("$sum")
+            }
+
+            assertEquals(expectedOutput, output)
+        } catch (e: LangError) {
+            fail("Unexpected exception: ${e.construct(program)}")
+        }
+    }
 }

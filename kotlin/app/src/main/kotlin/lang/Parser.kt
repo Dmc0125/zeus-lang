@@ -18,8 +18,16 @@ sealed interface StatementType {
     data class Block(val statements: List<Statement>) : StatementType
     data class If(
         val condition: Expression,
-        val thenBranch: Statement?,
+        val thenBranch: Statement,
         val elseBranch: Statement?,
+    ) : StatementType
+
+    data class For(val condition: Expression, val body: Statement) : StatementType
+    data class CFor(
+        val init: Statement?,
+        val condition: Expression?,
+        val update: Statement?,
+        val body: Statement,
     ) : StatementType
 }
 
@@ -45,8 +53,8 @@ class Parser(
         return if (idx + offset < tokens.size) tokens[idx + offset] else null
     }
 
-    fun peekOrThrow(): Token {
-        val token = this.peek()
+    fun peekOrThrow(offset: Int = 0): Token {
+        val token = this.peek(offset)
         if (token != null) {
             return token
         }
@@ -307,7 +315,7 @@ class Parser(
         return Statement(stmtType, identToken.line, identToken.col)
     }
 
-    fun parseBlockStatement(lBrace: Token): Statement? {
+    fun parseBlockStatement(lBrace: Token): Statement {
         // block => '{' statement* '}'
 
         this.idx += 1 // skip '{'
@@ -322,17 +330,10 @@ class Parser(
             }
 
             val stmt = this.parseStatement()
-            if (stmt != null) {
-                statements.add(stmt)
-            }
+            statements.add(stmt)
         }
 
         this.idx += 1 // skip '}'
-
-        // TODO: Don't do this
-        if (statements.isEmpty()) {
-            return null
-        }
 
         return Statement(
             StatementType.Block(statements),
@@ -379,7 +380,159 @@ class Parser(
         )
     }
 
-    fun parseStatement(): Statement? {
+    fun parseForStatement(forToken: Token): Statement {
+        // for => 'for' expression block
+        //      | 'for' varDecl? ';' expression? ';' assignment? block
+
+        assert(forToken.value == TokenValue.For) {
+            "Expected 'for' token, got ${forToken.value}"
+        }
+
+        this.idx += 1 // skip 'for'
+
+        // valid:
+        //
+        // for ;; {}
+        // for x := 1;; x = x + 1 {}
+        // for ;; x < 10 {}
+        // for x < 10 {}
+
+        fun requireSemicolon() {
+            val semicolon = this.peekOrThrow()
+            if (semicolon.value != TokenValue.Semicolon) {
+                throw LangError(semicolon.line, semicolon.col, ErrorType.Syntax, "Expected ';'")
+            }
+            this.idx += 1 // skip ';'
+        }
+
+        return when {
+            this.peekOrThrow().value == TokenValue.Semicolon -> {
+                // 'for' ';' expression? ';' assignment? block
+
+                this.idx += 1 // skip ';'
+
+                var cond: Expression? = null
+                if (this.peekOrThrow().value != TokenValue.Semicolon) {
+                    cond = this.parseExpression()
+                }
+                requireSemicolon() // skip ';'
+
+                var assignment: Statement? = null
+                run {
+                    val ident = this.peekOrThrow()
+                    if (ident.value == TokenValue.LBrace) {
+                        return@run
+                    }
+
+                    if (ident.value !is TokenValue.Ident) {
+                        throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
+                    }
+                    assignment = this.parseIdentStatement(ident)
+                    if (assignment.type !is StatementType.VariableAssignment) {
+                        throw LangError(
+                            assignment.line,
+                            assignment.col,
+                            ErrorType.Syntax,
+                            "Expected variable assignment"
+                        )
+                    }
+                }
+
+                val lBrace = this.peekOrThrow()
+                check(lBrace.value == TokenValue.LBrace) {
+                    throw LangError(lBrace.line, lBrace.col, ErrorType.Syntax, "Expected '{'")
+                }
+                val body = this.parseBlockStatement(lBrace)
+
+                Statement(
+                    StatementType.CFor(null, cond, assignment, body),
+                    forToken.line,
+                    forToken.col,
+                )
+            }
+
+            this.peekOrThrow(1).value == TokenValue.Colon -> {
+                // 'for' x : ...
+                // 'for' varDecl ';' expression? ';' expression? block
+
+                var decl: Statement
+                run {
+                    val ident = this.peekOrThrow()
+                    if (ident.value !is TokenValue.Ident) {
+                        throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
+                    }
+                    decl = this.parseIdentStatement(ident)
+                    if (decl.type !is StatementType.VariableDeclaration) {
+                        throw LangError(decl.line, decl.col, ErrorType.Syntax, "Expected variable declaration")
+                    }
+                }
+                requireSemicolon() // skip ';'
+
+                var cond: Expression? = null
+                if (this.peekOrThrow().value != TokenValue.Semicolon) {
+                    cond = this.parseExpression()
+                }
+                requireSemicolon() // skip ';'
+
+                var assignment: Statement? = null
+                run {
+                    val ident = this.peekOrThrow()
+                    if (ident.value == TokenValue.LBrace) {
+                        return@run
+                    }
+
+                    if (ident.value !is TokenValue.Ident) {
+                        throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
+                    }
+                    assignment = this.parseIdentStatement(ident)
+                    if (assignment.type !is StatementType.VariableAssignment) {
+                        throw LangError(
+                            assignment.line,
+                            assignment.col,
+                            ErrorType.Syntax,
+                            "Expected variable assignment"
+                        )
+                    }
+                }
+
+                val lBrace = this.peekOrThrow()
+                check(lBrace.value == TokenValue.LBrace) {
+                    throw LangError(lBrace.line, lBrace.col, ErrorType.Syntax, "Expected block")
+                }
+                val body = this.parseBlockStatement(lBrace)
+
+                Statement(
+                    StatementType.CFor(decl, cond, assignment, body),
+                    forToken.line,
+                    forToken.col,
+                )
+            }
+
+            else -> {
+                // 'for' expression block
+
+                val cond = this.parseExpression()
+
+                val lBrace = this.peekOrThrow()
+                check(lBrace.value == TokenValue.LBrace) {
+                    throw LangError(lBrace.line, lBrace.col, ErrorType.Syntax, "Expected block")
+                }
+
+                val body = this.parseBlockStatement(lBrace)
+
+                Statement(
+                    StatementType.For(
+                        condition = cond,
+                        body = body,
+                    ),
+                    forToken.line,
+                    forToken.col,
+                )
+            }
+        }
+    }
+
+    fun parseStatement(): Statement {
         // statement => variableDeclaration | print
 
         val next = this.peekOrThrow()
@@ -399,6 +552,7 @@ class Parser(
 
             is TokenValue.LBrace -> Pair(this.parseBlockStatement(next), false)
             is TokenValue.If -> Pair(this.parseIfStatement(next), false)
+            is TokenValue.For -> Pair(this.parseForStatement(next), false)
 
             else -> throw LangError(
                 next.line,
@@ -412,7 +566,7 @@ class Parser(
             val semicolon = this.peek()
             check(semicolon != null && semicolon.value == TokenValue.Semicolon) {
                 val cur = this.tokens[this.idx - 1]
-                throw LangError(cur.line, cur.col, ErrorType.Syntax, "Expected ';'")
+                throw LangError(cur.line, cur.col, ErrorType.Syntax, "Expect ';' after a statement")
             }
             this.idx += 1
         }

@@ -35,6 +35,25 @@ fun varAssignment(name: String, value: Expression, line: Int = 0, col: Int = 0):
 fun block(stmts: List<Statement>, line: Int = 0, col: Int = 0): Statement =
     Statement(StatementType.Block(stmts), line, col)
 
+fun forStmt(
+    condition: Expression,
+    body: Statement,
+    line: Int = 0,
+    col: Int = 0
+): Statement =
+    Statement(StatementType.For(condition, body), line, col)
+
+fun cForStmt(
+    init: Statement?,
+    condition: Expression?,
+    update: Statement?,
+    body: Statement,
+    line: Int = 0,
+    col: Int = 0
+): Statement =
+    Statement(StatementType.CFor(init, condition, update, body), line, col)
+
+
 fun ifStmt(
     condition: Expression,
     thenBranch: Statement,
@@ -118,7 +137,7 @@ class InterpreterTest {
     }
 
     @Test
-    fun `parse statement`() {
+    fun `parses statement`() {
         data class Input(
             val name: String,
             val stmt: List<Statement>,
@@ -221,10 +240,15 @@ class InterpreterTest {
         )
 
         for (input in inputs) {
-            val printer = BufferedPrinter()
-            val interpreter = Interpreter(printer)
-            interpreter.interpretProgram(input.stmt)
-            input.expected(interpreter)
+            println("Testing ${input.name}")
+            try {
+                val printer = BufferedPrinter()
+                val interpreter = Interpreter(printer)
+                interpreter.interpretProgram(input.stmt)
+                input.expected(interpreter)
+            } catch (e: LangError) {
+                fail("Failed to parse ${input.name}: ${e.message}")
+            }
         }
     }
 }

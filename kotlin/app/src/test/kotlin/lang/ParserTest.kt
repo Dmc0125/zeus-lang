@@ -554,4 +554,143 @@ class ParserTest {
             assertEquals(input.expected, stmt, "Failed to parse if statement ${input.name}")
         }
     }
+
+    @Test
+    fun `parses for statement`() {
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Statement,
+        )
+
+        val inputs = listOf(
+            Input(
+                "for true { println true; }",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.BoolLiteral(true), 1, 2),
+                    Token(TokenValue.LBrace, 1, 3),
+                    Token(TokenValue.Print(true), 1, 4),
+                    Token(TokenValue.BoolLiteral(true), 1, 5),
+                    Token(TokenValue.Semicolon, 1, 6),
+                    Token(TokenValue.RBrace, 1, 7),
+                ),
+                forStmt(
+                    bool(true, 1, 2),
+                    block(listOf(printStmt(bool(true, 1, 5), true, 1, 4)), 1, 3),
+                    1, 1
+                )
+            ),
+            Input(
+                "for 123 > x { x = x + 1; }",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.NumberLiteral(123.0), 1, 2),
+                    Token(TokenValue.Gt, 1, 3),
+                    Token(TokenValue.Ident("x"), 1, 4),
+                    Token(TokenValue.LBrace, 1, 5),
+                    Token(TokenValue.Ident("x"), 1, 6),
+                    Token(TokenValue.Equal, 1, 7),
+                    Token(TokenValue.Ident("x"), 1, 8),
+                    Token(TokenValue.Plus, 1, 9),
+                    Token(TokenValue.NumberLiteral(1.0), 1, 10),
+                    Token(TokenValue.Semicolon, 1, 11),
+                    Token(TokenValue.RBrace, 1, 12),
+                ),
+                forStmt(
+                    binary(TokenValue.Gt, num(123.0, 1, 2), ident("x", 1, 4), 1, 2),
+                    block(
+                        listOf(
+                            varAssignment(
+                                "x",
+                                binary(TokenValue.Plus, ident("x", 1, 8), num(1.0, 1, 10), 1, 8),
+                                1, 6
+                            )
+                        ), 1, 5
+                    ),
+                    1, 1
+                )
+            ),
+            Input(
+                "for i := 0; i < 10; i = i + 1 {}",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.Ident("i"), 1, 2),
+                    Token(TokenValue.Colon, 1, 3),
+                    Token(TokenValue.Equal, 1, 4),
+                    Token(TokenValue.NumberLiteral(0.0), 1, 5),
+                    Token(TokenValue.Semicolon, 1, 6),
+                    Token(TokenValue.Ident("i"), 1, 7),
+                    Token(TokenValue.Lt, 1, 8),
+                    Token(TokenValue.NumberLiteral(10.0), 1, 9),
+                    Token(TokenValue.Semicolon, 1, 10),
+                    Token(TokenValue.Ident("i"), 1, 11),
+                    Token(TokenValue.Equal, 1, 12),
+                    Token(TokenValue.Ident("i"), 1, 13),
+                    Token(TokenValue.Plus, 1, 14),
+                    Token(TokenValue.NumberLiteral(1.0), 1, 15),
+                    Token(TokenValue.LBrace, 1, 16),
+                    Token(TokenValue.RBrace, 1, 17)
+                ),
+                cForStmt(
+                    varDecl("i", null, num(0.0, 1, 5), 1, 2),
+                    binary(TokenValue.Lt, ident("i", 1, 7), num(10.0, 1, 9), 1, 7),
+                    varAssignment(
+                        "i",
+                        binary(TokenValue.Plus, ident("i", 1, 13), num(1.0, 1, 15), 1, 13),
+                        1, 11
+                    ),
+                    block(listOf(), 1, 16),
+                    1, 1,
+                ),
+            ),
+            Input(
+                "for ;; {}",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.Semicolon, 1, 2),
+                    Token(TokenValue.Semicolon, 1, 3),
+                    Token(TokenValue.LBrace, 1, 4),
+                    Token(TokenValue.RBrace, 1, 5),
+                ),
+                cForStmt(null, null, null, block(listOf(), 1, 4), 1, 1),
+            ),
+            Input(
+                "for ;x < 10; { println true; }",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.Semicolon, 1, 2),
+                    Token(TokenValue.Ident("x"), 1, 3),
+                    Token(TokenValue.Lt, 1, 4),
+                    Token(TokenValue.NumberLiteral(10.0), 1, 5),
+                    Token(TokenValue.Semicolon, 1, 6),
+                    Token(TokenValue.LBrace, 1, 7),
+                    Token(TokenValue.Print(true), 1, 8),
+                    Token(TokenValue.BoolLiteral(true), 1, 9),
+                    Token(TokenValue.Semicolon, 1, 10),
+                    Token(TokenValue.RBrace, 1, 11),
+                ),
+                cForStmt(
+                    null,
+                    binary(TokenValue.Lt, ident("x", 1, 3), num(10.0, 1, 5), 1, 3),
+                    null,
+                    block(
+                        listOf(
+                            printStmt(bool(true, 1, 9), true, 1, 8)
+                        ), 1, 7
+                    ),
+                    1, 1,
+                ),
+            ),
+        )
+
+        for (input in inputs) {
+            try {
+                val stmt = Parser(input.tokens).parseStatement()
+                assertEquals(input.expected, stmt, "Failed to parse for statement ${input.name}")
+            } catch (e: Exception) {
+                fail("Failed to parse for statement ${input.name}", e)
+            }
+        }
+    }
 }

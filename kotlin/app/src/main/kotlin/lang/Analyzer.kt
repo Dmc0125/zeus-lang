@@ -1,11 +1,35 @@
 package lang
 
-class AnalyzerScope {
+class Environment {
     val variables: MutableMap<String, VariableType> = mutableMapOf()
+
+    fun declare(name: String, type: VariableType): LangError? {
+        if (variables.containsKey(name)) {
+            return LangError(0, 0, ErrorType.Type, ErrorMessage.VariableAlreadyDefined)
+        }
+        variables[name] = type
+        return null
+    }
+
+    fun assign(name: String, type: VariableType): LangError? {
+        if (!variables.containsKey(name)) {
+            return LangError(0, 0, ErrorType.Type, ErrorMessage.UndefinedVariable)
+        }
+
+        if (variables[name] != type) {
+            return LangError(0, 0, ErrorType.Type, "Type mismatch : ${variables[name]} != ${type}")
+        }
+
+        return null
+    }
+
+    fun get(name: String): VariableType? {
+        return variables[name]
+    }
 }
 
 class Analyzer {
-    val stack: MutableList<AnalyzerScope> = mutableListOf(AnalyzerScope())
+    val stack: MutableList<Environment> = mutableListOf(Environment())
 
     fun analyzeUnary(expression: Node<ExpressionType.Unary>): VariableType {
         val unary = expression.type
@@ -113,10 +137,8 @@ class Analyzer {
         return when (expression.type) {
             is ExpressionType.Ident -> {
                 val ident = expression.type
-                for (scope in this.stack) {
-                    if (scope.variables.containsKey(ident.name)) {
-                        return scope.variables[ident.name]!!
-                    }
+                for (stackEnv in this.stack) {
+                    stackEnv.get(ident.name)?.let { return it }
                 }
                 throw LangError(
                     expression.line,
@@ -140,17 +162,11 @@ class Analyzer {
                 val decl = stmt.type
                 val scope = this.stack[this.stack.size - 1]
 
-                if (scope.variables.containsKey(decl.name)) {
-                    throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.VariableAlreadyDefined)
-                }
-
+                var valueType: VariableType?
                 if (decl.value == null) {
-                    check(decl.type != null) {
-                        throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.TypeNotSpecified)
-                    }
-                    scope.variables[decl.name] = decl.type
+                    valueType = decl.type
                 } else {
-                    val valueType = this.analyzeExpression(decl.value)
+                    valueType = this.analyzeExpression(decl.value)
                     if (decl.type != null) {
                         check(decl.type == valueType) {
                             throw LangError(
@@ -159,39 +175,45 @@ class Analyzer {
                             )
                         }
                     }
-                    scope.variables[decl.name] = valueType
+                }
+
+                if (valueType == null) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.TypeNotSpecified)
+                }
+
+                scope.declare(decl.name, valueType)?.let {
+                    it.line = stmt.line
+                    it.col = stmt.col
+                    throw it
                 }
             }
 
             is StatementType.VariableAssignment -> {
                 val assignment = stmt.type
                 var found = false
-                for (scope in this.stack) {
-                    if (scope.variables.containsKey(assignment.name)) {
-                        val variableType = scope.variables[assignment.name]
+
+                for (stackEnv in this.stack) {
+                    if (stackEnv.variables.containsKey(assignment.name)) {
                         val valueType = this.analyzeExpression(assignment.value)
-                        check(variableType == valueType) {
-                            throw LangError(
-                                stmt.line, stmt.col, ErrorType.Type,
-                                "Type mismatch: ${variableType} != ${valueType}",
-                            )
+
+                        stackEnv.assign(assignment.name, valueType)?.let {
+                            it.line = stmt.line
+                            it.col = stmt.col
+                            throw it
                         }
+
                         found = true
                     }
                 }
-                check(found) {
-                    throw LangError(
-                        stmt.line,
-                        stmt.col,
-                        ErrorType.Type,
-                        ErrorMessage.UndefinedVariable
-                    )
+
+                if (!found) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.UndefinedVariable)
                 }
             }
 
             is StatementType.Print -> this.analyzeExpression(stmt.type.expression)
             is StatementType.Block -> {
-                this.stack.add(AnalyzerScope())
+                this.stack.add(Environment())
                 for (statement in stmt.type.statements) {
                     this.analyzeStatement(statement)
                 }
@@ -209,12 +231,47 @@ class Analyzer {
                     )
                 }
 
-                if (stmt.type.thenBranch != null) {
-                    this.analyzeStatement(stmt.type.thenBranch)
-                }
+                this.analyzeStatement(stmt.type.thenBranch)
                 if (stmt.type.elseBranch != null) {
                     this.analyzeStatement(stmt.type.elseBranch)
                 }
+            }
+
+            is StatementType.For -> {
+                val stmt = stmt.type
+                val conditionType = this.analyzeExpression(stmt.condition)
+                check(conditionType == VariableType.Bool) {
+                    val cond = stmt.condition
+                    throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
+                }
+                this.analyzeStatement(stmt.body)
+            }
+
+            is StatementType.CFor -> {
+                val stmt = stmt.type
+
+                // NOTE: declaration inside init should only be visible to for loop
+                this.stack.add(Environment())
+
+                if (stmt.init != null) {
+                    this.analyzeStatement(stmt.init)
+                }
+
+                val cond = stmt.condition
+                if (stmt.condition != null) {
+                    val conditionType = this.analyzeExpression(cond)
+                    if (conditionType != VariableType.Bool) {
+                        throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
+                    }
+                }
+
+                if (stmt.update != null) {
+                    this.analyzeStatement(stmt.update)
+                }
+
+                this.analyzeStatement(stmt.body)
+
+                this.stack.removeLast()
             }
         }
     }

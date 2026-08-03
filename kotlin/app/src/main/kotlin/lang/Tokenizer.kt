@@ -42,6 +42,7 @@ sealed interface TokenValue {
     data class Type(val type: VariableType) : TokenValue
     data object If : TokenValue
     data object Else : TokenValue
+    data object For : TokenValue
 }
 
 data class Token(
@@ -117,7 +118,8 @@ fun tokenizerRun(input: String): List<Token> {
                 if (peek() == '&') {
                     tokens.add(Token(TokenValue.DoubleAmp, line, col))
                     col += 1
-                    continue
+                } else {
+                    throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
                 }
             }
 
@@ -126,7 +128,8 @@ fun tokenizerRun(input: String): List<Token> {
                 if (peek() == '|') {
                     tokens.add(Token(TokenValue.DoublePipe, line, col))
                     col += 1
-                    continue
+                } else {
+                    throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
                 }
             }
 
@@ -211,6 +214,7 @@ fun tokenizerRun(input: String): List<Token> {
 
                         "if" -> tokens.add(Token(TokenValue.If, line, startCol))
                         "else" -> tokens.add(Token(TokenValue.Else, line, startCol))
+                        "for" -> tokens.add(Token(TokenValue.For, line, startCol))
 
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }

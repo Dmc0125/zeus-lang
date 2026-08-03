@@ -168,6 +168,20 @@ class Interpreter(
         }
     }
 
+    fun interpretBlock(statement: Statement) {
+        assert(statement.type is StatementType.Block) {
+            "Expected block statement, got ${statement.type}"
+        }
+
+        val block = statement.type as StatementType.Block
+
+        this.scopes.add(mutableMapOf())
+        for (statement in block.statements) {
+            this.interpretStatement(statement)
+        }
+        this.scopes.removeAt(this.scopes.size - 1)
+    }
+
     fun interpretStatement(statement: Statement) {
         when (statement.type) {
             is StatementType.VariableDeclaration -> {
@@ -203,13 +217,7 @@ class Interpreter(
                 }
             }
 
-            is StatementType.Block -> {
-                this.scopes.add(mutableMapOf())
-                for (statement in statement.type.statements) {
-                    this.interpretStatement(statement)
-                }
-                this.scopes.removeAt(this.scopes.size - 1)
-            }
+            is StatementType.Block -> this.interpretBlock(statement)
 
             is StatementType.If -> {
                 val ifStmt = statement.type
@@ -219,10 +227,55 @@ class Interpreter(
                 }
                 condition = condition as VariableValue.Bool
 
-                if (condition.value && ifStmt.thenBranch != null) {
-                    this.interpretStatement(ifStmt.thenBranch)
+                if (condition.value) {
+                    this.interpretBlock(ifStmt.thenBranch)
                 } else if (!condition.value && ifStmt.elseBranch != null) {
                     this.interpretStatement(ifStmt.elseBranch)
+                }
+            }
+
+            is StatementType.For -> {
+                val forStmt = statement.type
+
+                while (true) {
+                    var cond = this.interpretExpression(forStmt.condition)
+                    assert(cond is VariableValue.Bool) {
+                        "Condition must be bool"
+                    }
+                    cond = cond as VariableValue.Bool
+
+                    if (!cond.value) {
+                        break
+                    }
+
+                    this.interpretBlock(forStmt.body)
+                }
+            }
+
+            is StatementType.CFor -> {
+                val stmt = statement.type
+
+                if (stmt.init != null) {
+                    this.interpretStatement(stmt.init)
+                }
+
+                while (true) {
+                    if (stmt.condition != null) {
+                        var cond = this.interpretExpression(stmt.condition)
+                        assert(cond is VariableValue.Bool) {
+                            "Condition must be bool"
+                        }
+                        cond = cond as VariableValue.Bool
+                        if (!cond.value) {
+                            break
+                        }
+                    }
+
+                    this.interpretBlock(stmt.body)
+
+                    if (stmt.update != null) {
+                        this.interpretStatement(stmt.update)
+                    }
                 }
             }
         }

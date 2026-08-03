@@ -64,8 +64,8 @@ sealed interface ErrorMessage {
 }
 
 data class LangError(
-    val line: Int,
-    val col: Int,
+    var line: Int,
+    var col: Int,
     val type: ErrorType,
     override var message: String,
 ) : RuntimeException("${type.display}: $message") {
