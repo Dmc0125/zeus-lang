@@ -33,6 +33,10 @@ sealed interface ErrorMessage {
         override val display: String = "Invalid number"
     }
 
+    data object StringContainsNewline : ErrorMessage {
+        override val display: String = "String contains newline character"
+    }
+
     // Parser
     data object UnexpectedEndOfInput : ErrorMessage {
         override val display: String = "Unexpected end of input"

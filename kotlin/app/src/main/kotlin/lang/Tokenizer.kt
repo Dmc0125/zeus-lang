@@ -142,14 +142,15 @@ fun tokenizerRun(input: String): List<Token> {
                 val startCol = col
                 col += 1
 
-                // TODO: Can not have new lines
-
                 while (true) {
                     val next = peek()
                     check(next != null) {
                         throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnterminatedString)
                     }
 
+                    if (next == '\n') {
+                        throw LangError(line, col, ErrorType.Syntax, ErrorMessage.StringContainsNewline)
+                    }
                     if (next == '"') {
                         break
                     }

@@ -130,4 +130,29 @@ class TokenizerTest {
         val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
         assertEquals(expected, exception)
     }
+
+    @Test
+    fun `handles newline in string`() {
+        run {
+            val input = """ "
+                hello
+                world
+            " """
+            val exception = assertFailsWith(LangError::class) {
+                tokenizerRun(input)
+            }
+            val expected = LangError(1, 3, ErrorType.Syntax, ErrorMessage.StringContainsNewline)
+            assertEquals(expected, exception)
+        }
+
+        run {
+            // should not throw
+            val input = """"hello\nworld""""
+            val tokens = tokenizerRun(input)
+            val expected = listOf(
+                Token(TokenValue.StringLiteral("hello\\nworld"), 1, 1),
+            )
+            assertEquals(expected, tokens)
+        }
+    }
 }
