@@ -263,7 +263,14 @@ class Analyzer {
                 this.stack.add(Environment())
 
                 if (stmt.init != null) {
-                    // TODO: Should be declaration
+                    check(stmt.init.type is StatementType.VariableDeclaration) {
+                        throw LangError(
+                            stmt.init.line,
+                            stmt.init.col,
+                            ErrorType.Syntax,
+                            "Expected variable declaration",
+                        )
+                    }
                     this.analyzeStatement(stmt.init)
                 }
 
@@ -276,7 +283,14 @@ class Analyzer {
                 }
 
                 if (stmt.update != null) {
-                    // TODO: Should be assignemnt
+                    check(stmt.update.type is StatementType.VariableAssignment) {
+                        throw LangError(
+                            stmt.update.line,
+                            stmt.update.col,
+                            ErrorType.Syntax,
+                            "Expected variable assignment",
+                        )
+                    }
                     this.analyzeStatement(stmt.update)
                 }
 

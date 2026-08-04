@@ -436,6 +436,21 @@ class ParserTest {
                 ),
                 varAssignment("foo", ident("x", 1, 6), 1, 1),
             ),
+            Input(
+                "x += 1",
+                listOf(
+                    Token(TokenValue.Ident("x"), 1, 1),
+                    Token(TokenValue.Plus, 1, 2),
+                    Token(TokenValue.Equal, 1, 3),
+                    Token(TokenValue.NumberLiteral(1.0), 1, 5),
+                    Token(TokenValue.Semicolon, 1, 6),
+                ),
+                varAssignment(
+                    "x",
+                    binary(TokenValue.Plus, ident("x", 1, 1), num(1.0, 1, 5), 1, 1),
+                    1, 1,
+                )
+            ),
         )
 
         for (input in inputs) {

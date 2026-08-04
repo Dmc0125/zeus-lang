@@ -244,66 +244,82 @@ class Parser(
     fun parseIdentStatement(identToken: Token): Statement {
         // identStatement => variableDeclaration | variableAssignment
         // variableDeclaration => ident ':=' expression | ident ':' type | ident ':' type '=' expression
-        // variableAssignment => ident '=' expression
+        // variableAssignment => ident '=' expression | ident ('+' | '-' | '*' | '/') '=' expression
 
         val ident = identToken.value as TokenValue.Ident
 
-        this.idx += 1
-        val next = this.peekOrThrow()
+        fun parseDeclaration(): StatementType {
+            this.idx += 1 // skip ':'
+            val type = this.peekOrThrow()
 
-        val stmtType = when (next.value) {
-            is TokenValue.Colon -> {
-                this.idx += 1
-                val type = this.peekOrThrow()
+            return when (type.value) {
+                TokenValue.Equal -> {
+                    this.idx += 1
+                    val value = this.parseExpression()
+                    StatementType.VariableDeclaration(
+                        name = ident.name,
+                        type = null,
+                        value = value,
+                    )
+                }
 
-                when (type.value) {
-                    is TokenValue.Equal -> {
+                is TokenValue.Type -> {
+                    this.idx += 1
+                    val variableType = type.value.type
+
+                    val equal = this.peekOrThrow()
+                    if (equal.value == TokenValue.Equal) {
                         this.idx += 1
                         val value = this.parseExpression()
                         StatementType.VariableDeclaration(
                             name = ident.name,
-                            type = null,
+                            type = variableType,
                             value = value,
                         )
+                    } else {
+                        StatementType.VariableDeclaration(
+                            name = ident.name,
+                            type = variableType,
+                            value = null,
+                        )
                     }
-
-                    is TokenValue.Type -> {
-                        this.idx += 1
-                        val variableType = type.value.type
-
-                        val equal = this.peekOrThrow()
-                        if (equal.value == TokenValue.Equal) {
-                            this.idx += 1
-                            val value = this.parseExpression()
-                            StatementType.VariableDeclaration(
-                                name = ident.name,
-                                type = variableType,
-                                value = value,
-                            )
-                        } else {
-                            StatementType.VariableDeclaration(
-                                name = ident.name,
-                                type = variableType,
-                                value = null,
-                            )
-                        }
-                    }
-
-                    else -> throw LangError(
-                        type.line,
-                        type.col,
-                        ErrorType.Syntax,
-                        "Expected type or '='",
-                    )
                 }
-            }
 
-            is TokenValue.Equal -> {
+                else -> throw LangError(type.line, type.col, ErrorType.Syntax, "Expected type or '='")
+            }
+        }
+
+        this.idx += 1 // skip ident
+        val next = this.peekOrThrow()
+
+        val stmtType = when (next.value) {
+            TokenValue.Colon -> parseDeclaration()
+            TokenValue.Equal -> {
                 this.idx += 1
                 val value = this.parseExpression()
                 StatementType.VariableAssignment(
                     name = ident.name,
                     value = value,
+                )
+            }
+
+            TokenValue.Plus, TokenValue.Minus, TokenValue.Star, TokenValue.Slash -> {
+                this.idx += 1 // skip operator
+                val equal = this.peekOrThrow()
+                check(equal.value == TokenValue.Equal) {
+                    throw LangError(equal.line, equal.col, ErrorType.Syntax, "Expected '='")
+                }
+
+                this.idx += 1
+                val expr = ExpressionType.Binary(
+                    next.value,
+                    Expression(ExpressionType.Ident(ident.name), identToken.line, identToken.col),
+                    this.parseExpression(),
+                )
+
+                StatementType.VariableAssignment(
+                    name = ident.name,
+                    value = Expression(expr, identToken.line, identToken.col),
                 )
             }
 
@@ -430,14 +446,6 @@ class Parser(
                         throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
                     }
                     assignment = this.parseIdentStatement(ident)
-                    if (assignment.type !is StatementType.VariableAssignment) {
-                        throw LangError(
-                            assignment.line,
-                            assignment.col,
-                            ErrorType.Syntax,
-                            "Expected variable assignment"
-                        )
-                    }
                 }
 
                 val lBrace = this.peekOrThrow()
@@ -464,9 +472,6 @@ class Parser(
                         throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
                     }
                     decl = this.parseIdentStatement(ident)
-                    if (decl.type !is StatementType.VariableDeclaration) {
-                        throw LangError(decl.line, decl.col, ErrorType.Syntax, "Expected variable declaration")
-                    }
                 }
                 requireSemicolon() // skip ';'
 
@@ -482,19 +487,10 @@ class Parser(
                     if (ident.value == TokenValue.LBrace) {
                         return@run
                     }
-
                     if (ident.value !is TokenValue.Ident) {
                         throw LangError(ident.line, ident.col, ErrorType.Syntax, "Expected identifier")
                     }
                     assignment = this.parseIdentStatement(ident)
-                    if (assignment.type !is StatementType.VariableAssignment) {
-                        throw LangError(
-                            assignment.line,
-                            assignment.col,
-                            ErrorType.Syntax,
-                            "Expected variable assignment"
-                        )
-                    }
                 }
 
                 val lBrace = this.peekOrThrow()
@@ -589,10 +585,7 @@ class Parser(
         var statements: MutableList<Statement> = mutableListOf()
 
         while (this.idx < this.tokens.size) {
-            val stmt = this.parseStatement()
-            if (stmt != null) {
-                statements += stmt
-            }
+            statements += this.parseStatement()
         }
 
         return statements
