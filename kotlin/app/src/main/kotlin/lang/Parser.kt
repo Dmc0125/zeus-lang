@@ -22,7 +22,7 @@ sealed interface StatementType {
         val elseBranch: Statement?,
     ) : StatementType
 
-    data class For(val condition: Expression, val body: Statement) : StatementType
+    data class For(val condition: Expression?, val body: Statement) : StatementType
     data class CFor(
         val init: Statement?,
         val condition: Expression?,
@@ -513,8 +513,10 @@ class Parser(
             else -> {
                 // 'for' expression block
 
-                // TODO: this is optional
-                val cond = this.parseExpression()
+                var cond: Expression? = null
+                if (this.peekOrThrow().value != TokenValue.LBrace) {
+                    cond = this.parseExpression()
+                }
 
                 val lBrace = this.peekOrThrow()
                 check(lBrace.value == TokenValue.LBrace) {

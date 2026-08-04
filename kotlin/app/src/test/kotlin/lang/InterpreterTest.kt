@@ -36,7 +36,7 @@ fun block(stmts: List<Statement>, line: Int = 0, col: Int = 0): Statement =
     Statement(StatementType.Block(stmts), line, col)
 
 fun forStmt(
-    condition: Expression,
+    condition: Expression?,
     body: Statement,
     line: Int = 0,
     col: Int = 0

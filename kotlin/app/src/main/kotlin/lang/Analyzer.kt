@@ -246,10 +246,12 @@ class Analyzer {
 
             is StatementType.For -> {
                 val stmt = stmt.type
-                val conditionType = this.analyzeExpression(stmt.condition)
-                check(conditionType == VariableType.Bool) {
-                    val cond = stmt.condition
-                    throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
+                if (stmt.condition != null) {
+                    val conditionType = this.analyzeExpression(stmt.condition)
+                    check(conditionType == VariableType.Bool) {
+                        val cond = stmt.condition
+                        throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
+                    }
                 }
                 this.analyzeBlock(stmt.body, true)
             }

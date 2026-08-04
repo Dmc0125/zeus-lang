@@ -582,6 +582,38 @@ class ParserTest {
                 )
             ),
             Input(
+                "for { x = x + 1; }",
+                listOf(
+                    Token(TokenValue.For, 1, 1),
+                    Token(TokenValue.LBrace, 1, 2),
+                    Token(TokenValue.Ident("x"), 1, 3),
+                    Token(TokenValue.Equal, 1, 4),
+                    Token(TokenValue.Ident("x"), 1, 5),
+                    Token(TokenValue.Plus, 1, 6),
+                    Token(TokenValue.NumberLiteral(1.0), 1, 7),
+                    Token(TokenValue.Semicolon, 1, 8),
+                    Token(TokenValue.RBrace, 1, 9),
+                ),
+                forStmt(
+                    null,
+                    block(
+                        listOf(
+                            varAssignment(
+                                "x",
+                                binary(
+                                    TokenValue.Plus,
+                                    ident("x", 1, 5),
+                                    num(1.0, 1, 7),
+                                    1, 5,
+                                ),
+                                1, 3
+                            ),
+                        ), 1, 2
+                    ),
+                    1, 1
+                )
+            ),
+            Input(
                 "for 123 > x { x = x + 1; }",
                 listOf(
                     Token(TokenValue.For, 1, 1),

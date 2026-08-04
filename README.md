@@ -12,7 +12,7 @@ I wanted to build a toy language since I've never built one and it seems fun.
   - declaration
   - assignment
 - [x] if
-- [ ] for
+- [x] for
 - [x] print
 - [ ] functions
 

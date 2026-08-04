@@ -247,14 +247,15 @@ class Interpreter(
                 while (true) {
                     this.insideLoop = true
 
-                    var cond = this.interpretExpression(forStmt.condition)
-                    assert(cond is VariableValue.Bool) {
-                        "Condition must be bool"
-                    }
-                    cond = cond as VariableValue.Bool
-
-                    if (!cond.value) {
-                        break
+                    if (forStmt.condition != null) {
+                        var cond = this.interpretExpression(forStmt.condition)
+                        assert(cond is VariableValue.Bool) {
+                            "Condition must be bool"
+                        }
+                        cond = cond as VariableValue.Bool
+                        if (!cond.value) {
+                            break
+                        }
                     }
 
                     this.interpretBlock(forStmt.body)

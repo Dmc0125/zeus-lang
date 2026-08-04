@@ -2,7 +2,34 @@ package lang
 
 import kotlin.test.*
 
+
 class AnalyzerTest {
+    fun runPipeline(program: String) {
+        val tokens = tokenizerRun(program)
+        val ast = Parser(tokens).parseProgram()
+        Analyzer().analyzeProgram(ast)
+    }
+
+    @Test
+    fun `throws at break outside loop`() {
+        val program = "break;"
+        val exception = assertFailsWith(LangError::class) {
+            runPipeline(program)
+        }
+        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.BreakOutsideLoop)
+        assertEquals(expected, exception)
+    }
+
+    @Test
+    fun `throws at continue outside loop`() {
+        val program = "continue;"
+        val exception = assertFailsWith(LangError::class) {
+            runPipeline(program)
+        }
+        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.ContinueOutsideLoop)
+        assertEquals(expected, exception)
+    }
+
     // @Test
     // fun `throws at invalid unary type`() {
     //     val u = Expression.Unary(
