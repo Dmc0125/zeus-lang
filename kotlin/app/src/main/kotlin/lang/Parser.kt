@@ -29,6 +29,9 @@ sealed interface StatementType {
         val update: Statement?,
         val body: Statement,
     ) : StatementType
+
+    data object Break : StatementType
+    data object Continue : StatementType
 }
 
 data class Node<T>(
@@ -317,7 +320,6 @@ class Parser(
 
     fun parseBlockStatement(lBrace: Token): Statement {
         // block => '{' statement* '}'
-
         this.idx += 1 // skip '{'
 
         val statements = mutableListOf<Statement>()
@@ -511,6 +513,7 @@ class Parser(
             else -> {
                 // 'for' expression block
 
+                // TODO: this is optional
                 val cond = this.parseExpression()
 
                 val lBrace = this.peekOrThrow()
@@ -519,12 +522,8 @@ class Parser(
                 }
 
                 val body = this.parseBlockStatement(lBrace)
-
                 Statement(
-                    StatementType.For(
-                        condition = cond,
-                        body = body,
-                    ),
+                    StatementType.For(cond, body),
                     forToken.line,
                     forToken.col,
                 )
@@ -550,9 +549,19 @@ class Parser(
                 Pair(stmt, true)
             }
 
-            is TokenValue.LBrace -> Pair(this.parseBlockStatement(next), false)
+            TokenValue.LBrace -> Pair(this.parseBlockStatement(next), false)
             is TokenValue.If -> Pair(this.parseIfStatement(next), false)
             is TokenValue.For -> Pair(this.parseForStatement(next), false)
+
+            TokenValue.Break -> {
+                this.idx += 1
+                Pair(Statement(StatementType.Break, next.line, next.col), true)
+            }
+
+            TokenValue.Continue -> {
+                this.idx += 1
+                Pair(Statement(StatementType.Continue, next.line, next.col), true)
+            }
 
             else -> throw LangError(
                 next.line,

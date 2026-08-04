@@ -89,7 +89,7 @@ class TokenizerTest {
 
     @Test
     fun `tokenizes keywords`() {
-        val input = "if else for print println number string bool"
+        val input = "if else for print println number string bool break continue"
         val tokens = tokenizerRun(input)
 
         val expected = listOf(
@@ -101,6 +101,8 @@ class TokenizerTest {
             Token(TokenValue.Type(VariableType.Number), 1, 27),
             Token(TokenValue.Type(VariableType.String), 1, 34),
             Token(TokenValue.Type(VariableType.Bool), 1, 41),
+            Token(TokenValue.Break, 1, 46),
+            Token(TokenValue.Continue, 1, 52),
         )
 
         assertTrue(tokens.size == expected.size)

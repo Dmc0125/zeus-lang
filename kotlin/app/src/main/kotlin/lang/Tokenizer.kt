@@ -43,6 +43,8 @@ sealed interface TokenValue {
     data object If : TokenValue
     data object Else : TokenValue
     data object For : TokenValue
+    data object Break : TokenValue
+    data object Continue : TokenValue
 }
 
 data class Token(
@@ -215,6 +217,8 @@ fun tokenizerRun(input: String): List<Token> {
                         "if" -> tokens.add(Token(TokenValue.If, line, startCol))
                         "else" -> tokens.add(Token(TokenValue.Else, line, startCol))
                         "for" -> tokens.add(Token(TokenValue.For, line, startCol))
+                        "break" -> tokens.add(Token(TokenValue.Break, line, startCol))
+                        "continue" -> tokens.add(Token(TokenValue.Continue, line, startCol))
 
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }

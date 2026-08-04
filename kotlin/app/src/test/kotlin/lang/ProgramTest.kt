@@ -1,6 +1,22 @@
 package lang
 
 import kotlin.test.*
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+
+fun runPipeline(output: PrintStream, program: String) {
+    val tokens = tokenizerRun(program)
+    val parser = Parser(tokens)
+    val ast = parser.parseProgram()
+    val analyzer = Analyzer()
+    analyzer.analyzeProgram(ast)
+
+    val printer = BufferedPrinter(output = output)
+    val interpreter = Interpreter(printer)
+    interpreter.interpretProgram(ast)
+
+    printer.flush()
+}
 
 class ProgramTest {
     @Test
@@ -28,19 +44,13 @@ class ProgramTest {
         """
 
         try {
-            val tokens = tokenizerRun(program)
-            val parser = Parser(tokens)
-            val ast = parser.parseProgram()
-            val analyzer = Analyzer()
-            analyzer.analyzeProgram(ast)
+            val buf = ByteArrayOutputStream()
+            val output = PrintStream(buf, true, Charsets.UTF_8)
 
-            val printer = BufferedPrinter()
-            val interpreter = Interpreter(printer)
-            interpreter.interpretProgram(ast)
+            runPipeline(output, program)
 
             val expectedOutput = "Starting program\nAda is an adult\n82.0\n"
-            val output = printer.sb.toString()
-            assertEquals(expectedOutput, output)
+            assertEquals(expectedOutput, buf.toString(Charsets.UTF_8))
         } catch (e: LangError) {
             fail("Unexpected exception: ${e.construct(program)}")
         }
@@ -68,17 +78,9 @@ class ProgramTest {
         """
 
         try {
-            val tokens = tokenizerRun(program)
-            val ast = Parser(tokens).parseProgram()
-
-            val printer = BufferedPrinter()
-            val analyzer = Analyzer()
-            val interpreter = Interpreter(printer)
-
-            analyzer.analyzeProgram(ast)
-            interpreter.interpretProgram(ast)
-
-            val output = printer.sb.toString()
+            val buf = ByteArrayOutputStream()
+            val output = PrintStream(buf, true, Charsets.UTF_8)
+            runPipeline(output, program)
 
             var sum: Double = 0.0
             for (i in 1..10) {
@@ -101,9 +103,66 @@ class ProgramTest {
                 appendLine("$sum")
             }
 
-            assertEquals(expectedOutput, output)
+            assertEquals(expectedOutput, buf.toString(Charsets.UTF_8))
         } catch (e: LangError) {
             fail("Unexpected exception: ${e.construct(program)}")
+        }
+    }
+
+    @Test
+    fun `test loop break`() {
+        val program = """
+            x := 1;
+
+            for x < 10 {
+                if x == 5 {
+                    {
+                        break;
+                    }
+                }
+                x = x + 1;
+            }
+
+            println x;
+        """
+
+        try {
+            val buf = ByteArrayOutputStream()
+            val output = PrintStream(buf, true, Charsets.UTF_8)
+            runPipeline(output, program)
+            assertEquals("5.0\n", buf.toString(Charsets.UTF_8))
+        } catch (e: LangError) {
+            println(e.construct(program))
+            throw e
+        }
+    }
+
+    @Test
+    fun `test continue`() {
+        val program = """
+            x := 1;
+            sum := 1;
+
+            for x := 1; x < 10; x = x + 1 {
+                if x == 5 {
+                    {
+                        continue;
+                    }
+                }
+                sum = sum + 1;
+            }
+
+            println sum;
+        """
+
+        try {
+            val buf = ByteArrayOutputStream()
+            val output = PrintStream(buf, true, Charsets.UTF_8)
+            runPipeline(output, program)
+            assertEquals("9.0\n", buf.toString(Charsets.UTF_8))
+        } catch (e: LangError) {
+            println(e.construct(program))
+            throw e
         }
     }
 }

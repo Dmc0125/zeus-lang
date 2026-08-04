@@ -55,6 +55,14 @@ sealed interface ErrorMessage {
         override val display: String = "Condition must be a boolean"
     }
 
+    data object BreakOutsideLoop : ErrorMessage {
+        override val display: String = "Break outside loop"
+    }
+
+    data object ContinueOutsideLoop : ErrorMessage {
+        override val display: String = "Continue outside loop"
+    }
+
     // Interpreter
 
     data object DivisionByZero : ErrorMessage {

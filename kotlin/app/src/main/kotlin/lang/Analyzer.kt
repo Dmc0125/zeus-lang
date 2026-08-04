@@ -156,7 +156,20 @@ class Analyzer {
         }
     }
 
-    fun analyzeStatement(stmt: Statement) {
+    fun analyzeBlock(block: Statement, insideLoop: Boolean = false) {
+        assert(block.type is StatementType.Block) { "Expected block, got ${block.type}" }
+
+        val stmts = (block.type as StatementType.Block).statements
+        if (stmts.isEmpty()) return
+
+        this.stack.add(Environment())
+        for (stmt in stmts) {
+            this.analyzeStatement(stmt, insideLoop)
+        }
+        this.stack.removeLast()
+    }
+
+    fun analyzeStatement(stmt: Statement, insideLoop: Boolean = false) {
         when (stmt.type) {
             is StatementType.VariableDeclaration -> {
                 val decl = stmt.type
@@ -212,13 +225,7 @@ class Analyzer {
             }
 
             is StatementType.Print -> this.analyzeExpression(stmt.type.expression)
-            is StatementType.Block -> {
-                this.stack.add(Environment())
-                for (statement in stmt.type.statements) {
-                    this.analyzeStatement(statement)
-                }
-                this.stack.removeAt(this.stack.size - 1)
-            }
+            is StatementType.Block -> this.analyzeBlock(stmt, insideLoop)
 
             is StatementType.If -> {
                 val conditionType = this.analyzeExpression(stmt.type.condition)
@@ -231,9 +238,9 @@ class Analyzer {
                     )
                 }
 
-                this.analyzeStatement(stmt.type.thenBranch)
+                this.analyzeBlock(stmt.type.thenBranch, insideLoop)
                 if (stmt.type.elseBranch != null) {
-                    this.analyzeStatement(stmt.type.elseBranch)
+                    this.analyzeStatement(stmt.type.elseBranch, insideLoop)
                 }
             }
 
@@ -244,7 +251,7 @@ class Analyzer {
                     val cond = stmt.condition
                     throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
                 }
-                this.analyzeStatement(stmt.body)
+                this.analyzeBlock(stmt.body, true)
             }
 
             is StatementType.CFor -> {
@@ -254,6 +261,7 @@ class Analyzer {
                 this.stack.add(Environment())
 
                 if (stmt.init != null) {
+                    // TODO: Should be declaration
                     this.analyzeStatement(stmt.init)
                 }
 
@@ -266,12 +274,25 @@ class Analyzer {
                 }
 
                 if (stmt.update != null) {
+                    // TODO: Should be assignemnt
                     this.analyzeStatement(stmt.update)
                 }
 
-                this.analyzeStatement(stmt.body)
+                this.analyzeBlock(stmt.body, true)
 
                 this.stack.removeLast()
+            }
+
+            StatementType.Break -> {
+                check(insideLoop) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.BreakOutsideLoop)
+                }
+            }
+
+            StatementType.Continue -> {
+                check(insideLoop) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.ContinueOutsideLoop)
+                }
             }
         }
     }

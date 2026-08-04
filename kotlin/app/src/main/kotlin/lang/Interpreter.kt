@@ -168,6 +168,10 @@ class Interpreter(
         }
     }
 
+    var insideLoop = false
+    var shouldBreak = false
+    var shouldContinue = false
+
     fun interpretBlock(statement: Statement) {
         assert(statement.type is StatementType.Block) {
             "Expected block statement, got ${statement.type}"
@@ -178,6 +182,9 @@ class Interpreter(
         this.scopes.add(mutableMapOf())
         for (statement in block.statements) {
             this.interpretStatement(statement)
+            if (this.insideLoop && (this.shouldBreak || this.shouldContinue)) {
+                break
+            }
         }
         this.scopes.removeAt(this.scopes.size - 1)
     }
@@ -238,6 +245,8 @@ class Interpreter(
                 val forStmt = statement.type
 
                 while (true) {
+                    this.insideLoop = true
+
                     var cond = this.interpretExpression(forStmt.condition)
                     assert(cond is VariableValue.Bool) {
                         "Condition must be bool"
@@ -249,7 +258,17 @@ class Interpreter(
                     }
 
                     this.interpretBlock(forStmt.body)
+
+                    if (this.shouldBreak) {
+                        this.shouldBreak = false
+                        break
+                    }
+                    if (this.shouldContinue) {
+                        this.shouldContinue = false
+                    }
                 }
+
+                this.insideLoop = false
             }
 
             is StatementType.CFor -> {
@@ -260,6 +279,8 @@ class Interpreter(
                 }
 
                 while (true) {
+                    this.insideLoop = true
+
                     if (stmt.condition != null) {
                         var cond = this.interpretExpression(stmt.condition)
                         assert(cond is VariableValue.Bool) {
@@ -273,10 +294,28 @@ class Interpreter(
 
                     this.interpretBlock(stmt.body)
 
+                    if (this.shouldBreak) {
+                        this.shouldBreak = false
+                        break
+                    }
+                    if (this.shouldContinue) {
+                        this.shouldContinue = false
+                    }
+
                     if (stmt.update != null) {
                         this.interpretStatement(stmt.update)
                     }
                 }
+
+                this.insideLoop = false
+            }
+
+            StatementType.Break -> {
+                this.shouldBreak = true
+            }
+
+            StatementType.Continue -> {
+                this.shouldContinue = true
             }
         }
     }
