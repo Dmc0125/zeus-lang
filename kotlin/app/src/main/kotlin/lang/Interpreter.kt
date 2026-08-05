@@ -152,8 +152,8 @@ class Interpreter(
                             TokenValue.Slash -> {
                                 check(right.value != 0.0) {
                                     throw LangError(
-                                        expression.col,
                                         expression.line,
+                                        expression.col,
                                         ErrorType.Runtime,
                                         ErrorMessage.DivisionByZero,
                                     )
@@ -261,12 +261,14 @@ class Interpreter(
         this.varEnv = this.varEnv.child()
         this.funcEnv = this.funcEnv.child()
 
-        for (statement in block.statements) {
-            this.interpretStatement(statement)
+        try {
+            for (statement in block.statements) {
+                this.interpretStatement(statement)
+            }
+        } finally {
+            this.varEnv = this.varEnv.parent!!
+            this.funcEnv = this.funcEnv.parent!!
         }
-
-        this.varEnv = this.varEnv.parent!!
-        this.funcEnv = this.funcEnv.parent!!
     }
 
     fun interpretStatement(statement: Statement) {

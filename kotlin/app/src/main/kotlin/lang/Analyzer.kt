@@ -3,12 +3,17 @@ package lang
 sealed interface ConditionFlow {
     data object FallsThrough : ConditionFlow
     data object Returns : ConditionFlow
+    data object InfiniteLoop : ConditionFlow
 }
 
 data class FunctionSignature(
     val params: List<FunctionParameter>,
     val ret: VariableType?,
     var flow: ConditionFlow = ConditionFlow.FallsThrough
+)
+
+data class Loop(
+    var hasBreak: Boolean,
 )
 
 class Analyzer {
@@ -171,7 +176,7 @@ class Analyzer {
 
     fun analyzeBlock(
         block: Statement,
-        insideLoop: Boolean = false,
+        loop: Loop? = null,
         function: FunctionSignature? = null
     ) {
         assert(block.type is StatementType.Block) { "Expected block, got ${block.type}" }
@@ -183,7 +188,7 @@ class Analyzer {
         this.funcEnv = this.funcEnv.child()
 
         for (stmt in stmts) {
-            this.analyzeStatement(stmt, insideLoop, function)
+            this.analyzeStatement(stmt, loop, function)
         }
 
         this.varEnv = this.varEnv.parent!!
@@ -192,7 +197,7 @@ class Analyzer {
 
     fun analyzeStatement(
         stmt: Statement,
-        insideLoop: Boolean = false,
+        loop: Loop? = null,
         function: FunctionSignature? = null
     ) {
         when (stmt.type) {
@@ -232,7 +237,7 @@ class Analyzer {
 
             is StatementType.Print -> this.analyzeExpression(stmt.type.expression)
 
-            is StatementType.Block -> this.analyzeBlock(stmt, insideLoop, function)
+            is StatementType.Block -> this.analyzeBlock(stmt, loop, function)
 
             is StatementType.If -> {
                 val conditionType = this.analyzeExpression(stmt.type.condition)
@@ -245,7 +250,7 @@ class Analyzer {
                     )
                 }
 
-                this.analyzeBlock(stmt.type.thenBranch, insideLoop, function)
+                this.analyzeBlock(stmt.type.thenBranch, loop, function)
                 val elseBranch = stmt.type.elseBranch
 
                 if (elseBranch == null) {
@@ -255,7 +260,7 @@ class Analyzer {
                 } else {
                     // if one of the branches is fall through, the flow is fall through
                     var thenFlow = function?.flow ?: ConditionFlow.FallsThrough
-                    this.analyzeStatement(stmt.type.elseBranch, insideLoop, function)
+                    this.analyzeStatement(stmt.type.elseBranch, loop, function)
 
                     if (function != null) {
                         if (thenFlow == ConditionFlow.FallsThrough || function.flow == ConditionFlow.FallsThrough) {
@@ -267,14 +272,23 @@ class Analyzer {
 
             is StatementType.For -> {
                 val stmt = stmt.type
-                if (stmt.condition != null) {
+                val cond = stmt.condition
+                if (cond != null) {
                     val conditionType = this.analyzeExpression(stmt.condition)
                     check(conditionType == VariableType.Bool) {
                         val cond = stmt.condition
                         throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
                     }
                 }
-                this.analyzeBlock(stmt.body, true, function)
+
+                var currentLoop = Loop(false)
+                this.analyzeBlock(stmt.body, currentLoop, function)
+
+                if (cond == null || (cond.type is ExpressionType.BoolLiteral && cond.type.value && !currentLoop.hasBreak)) {
+                    if (function != null && function.flow != ConditionFlow.Returns) {
+                        function.flow = ConditionFlow.InfiniteLoop
+                    }
+                }
             }
 
             is StatementType.CFor -> {
@@ -295,7 +309,7 @@ class Analyzer {
                 }
 
                 val cond = stmt.condition
-                if (stmt.condition != null) {
+                if (cond != null) {
                     val conditionType = this.analyzeExpression(cond)
                     if (conditionType != VariableType.Bool) {
                         throw LangError(cond.line, cond.col, ErrorType.Type, ErrorMessage.ConditionMustBeBoolean)
@@ -314,19 +328,27 @@ class Analyzer {
                     this.analyzeStatement(stmt.update)
                 }
 
-                this.analyzeBlock(stmt.body, true, function)
+                var currentLoop = Loop(false)
+                this.analyzeBlock(stmt.body, currentLoop, function)
+
+                if (cond == null || (cond.type is ExpressionType.BoolLiteral && cond.type.value && !currentLoop.hasBreak)) {
+                    if (function != null && function.flow != ConditionFlow.Returns) {
+                        function.flow = ConditionFlow.InfiniteLoop
+                    }
+                }
 
                 this.varEnv = this.varEnv.parent!!
             }
 
             StatementType.Break -> {
-                check(insideLoop) {
+                if (loop == null) {
                     throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.BreakOutsideLoop)
                 }
+                loop.hasBreak = true
             }
 
             StatementType.Continue -> {
-                check(insideLoop) {
+                if (loop == null) {
                     throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.ContinueOutsideLoop)
                 }
             }
@@ -363,12 +385,12 @@ class Analyzer {
 
                 val body = func.body.type as StatementType.Block
                 for (stmt in body.statements) {
-                    this.analyzeStatement(stmt, false, signature)
+                    this.analyzeStatement(stmt, null, signature)
                 }
 
                 // validate return
 
-                if (func.ret != null && signature.flow != ConditionFlow.Returns) {
+                if (func.ret != null && signature.flow == ConditionFlow.FallsThrough) {
                     throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.MissingReturn)
                 }
 

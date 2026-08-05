@@ -212,4 +212,18 @@ class AnalyzerFunction : AnalyzerTest() {
         """
         runPipeline(program)
     }
+
+    @Test
+    fun `does not throw if return is missing but loop is infinite`() {
+        val program = """
+            fun foo(): number {
+                if true {
+                    return 123;
+                }
+                for true {
+                }
+            }
+        """
+        runPipeline(program)
+    }
 }

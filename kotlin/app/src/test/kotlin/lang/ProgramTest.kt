@@ -133,8 +133,7 @@ class ProgramTest {
             runPipeline(output, program)
             assertEquals("5.0\n", buf.toString(Charsets.UTF_8))
         } catch (e: LangError) {
-            println(e.construct(program))
-            throw e
+            fail(e.construct(program), e)
         }
     }
 
