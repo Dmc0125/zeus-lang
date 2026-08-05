@@ -740,4 +740,74 @@ class ParserTest {
             }
         }
     }
+
+    @Test
+    fun `parses function declaration`() {
+        data class Input(
+            val name: String,
+            val tokens: List<Token>,
+            val expected: Statement,
+        )
+
+        val inputs = listOf(
+            Input(
+                "fun add(a: number, b: number) { }",
+                listOf(
+                    Token(TokenValue.Fun, 1, 1),
+                    Token(TokenValue.Ident("add"), 1, 2),
+                    Token(TokenValue.LParen, 1, 3),
+                    Token(TokenValue.Ident("a"), 1, 4),
+                    Token(TokenValue.Colon, 1, 5),
+                    Token(TokenValue.Type(VariableType.Number), 1, 6),
+                    Token(TokenValue.Comma, 1, 7),
+                    Token(TokenValue.Ident("b"), 1, 8),
+                    Token(TokenValue.Colon, 1, 9),
+                    Token(TokenValue.Type(VariableType.Number), 1, 10),
+                    Token(TokenValue.RParen, 1, 11),
+                    Token(TokenValue.LBrace, 1, 12),
+                    Token(TokenValue.RBrace, 1, 13),
+                ),
+                funDecl(
+                    "add",
+                    listOf(
+                        funParam("a", VariableType.Number, 1, 4),
+                        funParam("b", VariableType.Number, 1, 8),
+                    ),
+                    null,
+                    block(listOf(), 1, 12),
+                    1, 1,
+                )
+            ),
+            Input(
+                "fun foo(): number { return 123; }",
+                listOf(
+                    Token(TokenValue.Fun, 1, 1),
+                    Token(TokenValue.Ident("foo"), 1, 2),
+                    Token(TokenValue.LParen, 1, 3),
+                    Token(TokenValue.RParen, 1, 4),
+                    Token(TokenValue.Colon, 1, 5),
+                    Token(TokenValue.Type(VariableType.Number), 1, 6),
+                    Token(TokenValue.LBrace, 1, 7),
+                    Token(TokenValue.Return, 1, 8),
+                    Token(TokenValue.NumberLiteral(123.0), 1, 9),
+                    Token(TokenValue.Semicolon, 1, 10),
+                    Token(TokenValue.RBrace, 1, 11),
+                ),
+                funDecl(
+                    "foo",
+                    listOf(),
+                    VariableType.Number,
+                    block(listOf(returnStmt(num(123.0, 1, 9), 1, 8)), 1, 7),
+                    1, 1,
+                )
+            )
+        )
+
+        for (input in inputs) {
+            println("Starting test for ${input.name}")
+            val result = Parser(input.tokens).parseProgram()
+            assertEquals(result.size, 1)
+            assertEquals(input.expected, result[0])
+        }
+    }
 }

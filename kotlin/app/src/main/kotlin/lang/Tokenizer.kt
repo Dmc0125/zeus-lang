@@ -4,6 +4,12 @@ sealed interface VariableType {
     data object Number : VariableType
     data object String : VariableType
     data object Bool : VariableType
+
+    fun defaultValue(): VariableValue = when (this) {
+        VariableType.Number -> VariableValue.Number(0.0)
+        VariableType.String -> VariableValue.String("")
+        VariableType.Bool -> VariableValue.Bool(false)
+    }
 }
 
 sealed interface TokenValue {
@@ -18,6 +24,7 @@ sealed interface TokenValue {
     data object Minus : TokenValue
     data object Star : TokenValue
     data object Slash : TokenValue
+    data object Comma : TokenValue
     data object Colon : TokenValue
     data object Semicolon : TokenValue
     data object Equal : TokenValue
@@ -45,6 +52,8 @@ sealed interface TokenValue {
     data object For : TokenValue
     data object Break : TokenValue
     data object Continue : TokenValue
+    data object Fun : TokenValue
+    data object Return : TokenValue
 }
 
 data class Token(
@@ -105,6 +114,7 @@ fun tokenizerRun(input: String): List<Token> {
             '-' -> tokens.add(Token(TokenValue.Minus, line, col))
             '*' -> tokens.add(Token(TokenValue.Star, line, col))
             '/' -> tokens.add(Token(TokenValue.Slash, line, col))
+            ',' -> tokens.add(Token(TokenValue.Comma, line, col))
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
             ':' -> tokens.add(Token(TokenValue.Colon, line, col))
             '(' -> tokens.add(Token(TokenValue.LParen, line, col))
@@ -220,6 +230,8 @@ fun tokenizerRun(input: String): List<Token> {
                         "for" -> tokens.add(Token(TokenValue.For, line, startCol))
                         "break" -> tokens.add(Token(TokenValue.Break, line, startCol))
                         "continue" -> tokens.add(Token(TokenValue.Continue, line, startCol))
+                        "fun" -> tokens.add(Token(TokenValue.Fun, line, startCol))
+                        "return" -> tokens.add(Token(TokenValue.Return, line, startCol))
 
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }

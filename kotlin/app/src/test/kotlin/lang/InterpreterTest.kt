@@ -53,7 +53,6 @@ fun cForStmt(
 ): Statement =
     Statement(StatementType.CFor(init, condition, update, body), line, col)
 
-
 fun ifStmt(
     condition: Expression,
     thenBranch: Statement,
@@ -62,6 +61,34 @@ fun ifStmt(
     col: Int = 0
 ): Statement =
     Statement(StatementType.If(condition, thenBranch, elseBranch), line, col)
+
+fun funParam(
+    name: String,
+    type: VariableType,
+    line: Int = 0,
+    col: Int = 0
+): FunctionParameter =
+    FunctionParameter(name, type, line, col)
+
+fun funDecl(
+    name: String,
+    params: List<FunctionParameter>,
+    ret: VariableType?,
+    body: Statement,
+    line: Int = 0,
+    col: Int = 0
+): Statement =
+    Statement(StatementType.FunctionDeclaration(name, params, ret, body), line, col)
+
+fun returnStmt(
+    value: Expression,
+    line: Int = 0,
+    col: Int = 0
+): Statement =
+    Statement(StatementType.Return(value), line, col)
+
+fun call(name: String, args: List<Expression>, line: Int = 0, col: Int = 0): Expression =
+    Expression(ExpressionType.Call(name, args), line, col)
 
 class InterpreterTest {
     @Test
@@ -149,7 +176,7 @@ class InterpreterTest {
                 "foo := 12.0;",
                 listOf(varDecl("foo", null, num(12.0))),
                 { interpreter ->
-                    assertEquals(VariableValue.Number(12.0), interpreter.scopes[0]["foo"])
+                    assertEquals(VariableValue.Number(12.0), interpreter.varEnv.get("foo"))
                 },
             ),
             Input(
@@ -173,9 +200,7 @@ class InterpreterTest {
                     varAssignment("x", num(10.0)),
                 ),
                 { interpreter ->
-                    val x = interpreter.scopes[0]["x"]
-                    assertNotNull(x)
-                    assertEquals(VariableValue.Number(10.0), x)
+                    assertEquals(VariableValue.Number(10.0), interpreter.varEnv.get("x"))
                 },
             ),
             Input(
@@ -185,18 +210,14 @@ class InterpreterTest {
                     block(listOf(varAssignment("x", num(10.0)))),
                 ),
                 { interpreter ->
-                    val x = interpreter.scopes[0]["x"]
-                    assertNotNull(x)
-                    assertEquals(VariableValue.Number(10.0), x)
+                    assertEquals(VariableValue.Number(10.0), interpreter.varEnv.get("x"))
                 },
             ),
             Input(
                 "{ x := 5; }",
                 listOf(block(listOf(varDecl("x", null, num(5.0))))),
                 { interpreter ->
-                    assertEquals(1, interpreter.scopes.size)
-                    val x = interpreter.scopes[0]["x"]
-                    assertNull(x)
+                    assertNull(interpreter.varEnv.get("x"))
                 },
             ),
             Input(
@@ -210,10 +231,7 @@ class InterpreterTest {
                     )
                 ),
                 { interpreter ->
-                    assertEquals(1, interpreter.scopes.size)
-                    val x = interpreter.scopes[0]["x"]
-                    assertNotNull(x)
-                    assertEquals(VariableValue.Number(5.0), x)
+                    assertEquals(VariableValue.Number(5.0), interpreter.varEnv.get("x"))
                 },
             ),
             Input(
@@ -231,12 +249,30 @@ class InterpreterTest {
                     )
                 ),
                 { interpreter ->
-                    assertEquals(1, interpreter.scopes.size)
-                    val x = interpreter.scopes[0]["x"]
-                    assertNotNull(x)
-                    assertEquals(VariableValue.Number(20.0), x)
+                    assertEquals(VariableValue.Number(20.0), interpreter.varEnv.get("x"))
                 },
             ),
+
+            Input(
+                "fn foo(x: number) {  }",
+                listOf(
+                    funDecl(
+                        "foo",
+                        listOf(funParam("x", VariableType.Number)),
+                        null,
+                        block(listOf()),
+                    )
+                ),
+                { interpreter ->
+                    val func = interpreter.funcEnv.get("foo")
+                    assertNotNull(func)
+                    assertEquals(1, func.params.size)
+                    val param = func.params[0]
+                    assertEquals("x", param.name)
+                    assertEquals(VariableType.Number, param.type)
+                    assertEquals(0, func.body.statements.size)
+                },
+            )
         )
 
         for (input in inputs) {
@@ -250,5 +286,32 @@ class InterpreterTest {
                 fail("Failed to parse ${input.name}: ${e.message}")
             }
         }
+    }
+
+    @Test
+    fun `interprets function call`() {
+        // fun foo() {
+        //  return 5;
+        // }
+        // x := foo();
+
+        val program = listOf(
+            funDecl(
+                "foo",
+                listOf(),
+                VariableType.Number,
+                block(listOf(returnStmt(num(5.0)))),
+            ),
+            varDecl("x", null, call("foo", listOf())),
+        )
+
+        val interpreter = Interpreter()
+        interpreter.interpretProgram(program)
+
+        val foo = interpreter.funcEnv.get("foo")
+        assertNotNull(foo)
+
+        val x = interpreter.varEnv.get("x")
+        assertEquals(VariableValue.Number(5.0), x)
     }
 }

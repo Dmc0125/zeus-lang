@@ -50,10 +50,54 @@ sealed interface VariableValue {
     }
 }
 
+class Environment<T>(val parent: Environment<T>? = null) {
+    val scope = mutableMapOf<String, T>()
+
+    fun get(name: String): T? {
+        val value = scope[name]
+        if (value == null && parent != null) {
+            return parent.get(name)
+        }
+        return value
+    }
+
+    fun declare(name: String, value: T): ErrorMessage? {
+        if (scope.contains(name)) {
+            return ErrorMessage.AlreadyDeclared
+        }
+        scope[name] = value
+        return null
+    }
+
+    fun assign(name: String, value: T): ErrorMessage? {
+        if (!scope.contains(name)) {
+            if (parent != null) {
+                return parent.assign(name, value)
+            }
+            return ErrorMessage.Undefined
+        }
+        scope[name] = value
+        return null
+    }
+
+    fun child(): Environment<T> {
+        return Environment(this)
+    }
+}
+
+data class Function(
+    val params: List<FunctionParameter>,
+    val body: StatementType.Block,
+    val funcEnv: Environment<Function>,
+)
+
+class Return(val value: VariableValue) : Throwable("")
+
 class Interpreter(
     val printer: BufferedPrinter? = null,
 ) {
-    val scopes: MutableList<MutableMap<String, VariableValue>> = mutableListOf(mutableMapOf())
+    var varEnv = Environment<VariableValue>()
+    var funcEnv = Environment<Function>()
 
     fun interpretUnary(expression: Node<ExpressionType.Unary>): VariableValue {
         val value = interpretExpression(expression.type.operand)
@@ -148,23 +192,58 @@ class Interpreter(
         }
     }
 
-    fun interpretExpression(expression: Node<ExpressionType>): VariableValue {
-        return when (expression.type) {
+    fun interpretExpression(expr: Node<ExpressionType>): VariableValue {
+        return when (expr.type) {
             is ExpressionType.Ident -> {
-                val ident = expression.type
-                for (scope in this.scopes) {
-                    if (scope.contains(ident.name)) {
-                        return scope[ident.name]!!
-                    }
+                val ident = expr.type
+                val value = this.varEnv.get(ident.name)
+                if (value == null) {
+                    throw LangError(expr.line, expr.col, ErrorType.Type, ErrorMessage.Undefined)
                 }
-                throw RuntimeException("Unreachable: variable undefined: ${ident.name}")
+                value
             }
 
-            is ExpressionType.NumberLiteral -> VariableValue.Number(expression.type.value)
-            is ExpressionType.StringLiteral -> VariableValue.String(expression.type.value)
-            is ExpressionType.BoolLiteral -> VariableValue.Bool(expression.type.value)
-            is ExpressionType.Unary -> this.interpretUnary(expression as Node<ExpressionType.Unary>)
-            is ExpressionType.Binary -> this.interpretBinary(expression as Node<ExpressionType.Binary>)
+            is ExpressionType.NumberLiteral -> VariableValue.Number(expr.type.value)
+            is ExpressionType.StringLiteral -> VariableValue.String(expr.type.value)
+            is ExpressionType.BoolLiteral -> VariableValue.Bool(expr.type.value)
+            is ExpressionType.Unary -> this.interpretUnary(expr as Node<ExpressionType.Unary>)
+            is ExpressionType.Binary -> this.interpretBinary(expr as Node<ExpressionType.Binary>)
+            is ExpressionType.Call -> {
+                val call = expr.type
+
+                var func = this.funcEnv.get(call.name)
+                assert(func != null) { "Function not declared" }
+
+                func = func!!
+
+                val prevVarEnv = this.varEnv
+                val prevFuncEnv = this.funcEnv
+
+                this.funcEnv = func.funcEnv
+                this.varEnv = Environment<VariableValue>()
+                for ((i, callArg) in call.args.withIndex()) {
+                    val sigParam = func.params[i]
+                    val value = this.interpretExpression(callArg)
+                    this.varEnv.assign(sigParam.name, value)
+                }
+
+                var ret: VariableValue? = null
+
+                try {
+                    for (stmt in func.body.statements) {
+                        this.interpretStatement(stmt)
+                    }
+                } catch (e: Return) {
+                    ret = e.value
+                }
+
+                this.varEnv = prevVarEnv
+                this.funcEnv = prevFuncEnv
+
+                check(ret != null) { "unimplemented" }
+
+                ret
+            }
         }
     }
 
@@ -179,37 +258,43 @@ class Interpreter(
 
         val block = statement.type as StatementType.Block
 
-        this.scopes.add(mutableMapOf())
+        this.varEnv = this.varEnv.child()
+        this.funcEnv = this.funcEnv.child()
+
         for (statement in block.statements) {
             this.interpretStatement(statement)
             if (this.insideLoop && (this.shouldBreak || this.shouldContinue)) {
                 break
             }
         }
-        this.scopes.removeAt(this.scopes.size - 1)
+
+        this.varEnv = this.varEnv.parent!!
+        this.funcEnv = this.funcEnv.parent!!
     }
 
     fun interpretStatement(statement: Statement) {
         when (statement.type) {
             is StatementType.VariableDeclaration -> {
                 val decl = statement.type
-                val scope = this.scopes[this.scopes.size - 1]
+                var value: VariableValue? = null
+
                 if (decl.value == null) {
-                    scope[decl.name] = VariableValue.Number(0.0)
+                    value = decl.type!!.defaultValue()
                 } else {
-                    scope[decl.name] = interpretExpression(decl.value)
+                    value = this.interpretExpression(decl.value)
+                }
+
+                this.varEnv.declare(decl.name, value!!)?.let {
+                    throw RuntimeException(it.display)
                 }
             }
 
             is StatementType.VariableAssignment -> {
                 val assign = statement.type
-                for (scope in this.scopes) {
-                    if (scope.contains(assign.name)) {
-                        scope[assign.name] = interpretExpression(assign.value)
-                        return
-                    }
+                val value = this.interpretExpression(assign.value)
+                this.varEnv.assign(assign.name, value)?.let {
+                    throw RuntimeException(it.display)
                 }
-                throw RuntimeException("Unreachable: variable undefined: ${assign.name}")
             }
 
             is StatementType.Print -> {
@@ -317,6 +402,27 @@ class Interpreter(
 
             StatementType.Continue -> {
                 this.shouldContinue = true
+            }
+
+            is StatementType.FunctionDeclaration -> {
+                val decl = statement.type
+                val funcEnv = this.funcEnv
+                val body = decl.body.type as StatementType.Block
+
+                val func = Function(
+                    params = decl.params,
+                    body = body,
+                    funcEnv = funcEnv.child(),
+                )
+
+                funcEnv.declare(decl.name, func)?.let {
+                    throw LangError(statement.line, statement.col, ErrorType.Syntax, it)
+                }
+            }
+
+            is StatementType.Return -> {
+                val ret = this.interpretExpression(statement.type.value)
+                throw Return(ret)
             }
         }
     }

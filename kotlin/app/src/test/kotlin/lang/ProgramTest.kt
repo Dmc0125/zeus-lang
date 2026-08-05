@@ -4,7 +4,7 @@ import kotlin.test.*
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 
-fun runPipeline(output: PrintStream, program: String) {
+fun runPipeline(output: PrintStream, program: String): Interpreter {
     val tokens = tokenizerRun(program)
     val parser = Parser(tokens)
     val ast = parser.parseProgram()
@@ -16,6 +16,7 @@ fun runPipeline(output: PrintStream, program: String) {
     interpreter.interpretProgram(ast)
 
     printer.flush()
+    return interpreter
 }
 
 class ProgramTest {

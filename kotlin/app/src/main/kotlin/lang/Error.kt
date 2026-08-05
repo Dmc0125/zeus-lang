@@ -43,12 +43,25 @@ sealed interface ErrorMessage {
     }
 
     // Analyzer
+
+    data object AlreadyDeclared : ErrorMessage {
+        override val display: String = "Already declared"
+    }
+
+    data object Undefined : ErrorMessage {
+        override val display: String = "Undefined"
+    }
+
     data object UndefinedVariable : ErrorMessage {
         override val display: String = "Undefined variable"
     }
 
     data object VariableAlreadyDefined : ErrorMessage {
         override val display: String = "Variable already defined"
+    }
+
+    data object FunctionAlreadyDeclared : ErrorMessage {
+        override val display: String = "Function already declared"
     }
 
     data object TypeNotSpecified : ErrorMessage {
@@ -65,6 +78,26 @@ sealed interface ErrorMessage {
 
     data object ContinueOutsideLoop : ErrorMessage {
         override val display: String = "Continue outside loop"
+    }
+
+    data object FunctionParameterOutsideFunction : ErrorMessage {
+        override val display: String = "Function parameter outside function"
+    }
+
+    data object ExpectedFunctionParameter : ErrorMessage {
+        override val display: String = "Expected function parameter"
+    }
+
+    data object ReturnOutsideFunction : ErrorMessage {
+        override val display: String = "Return outside function"
+    }
+
+    data object ReturnTypeMismatch : ErrorMessage {
+        override val display: String = "Return type mismatch"
+    }
+
+    data object MissingReturn : ErrorMessage {
+        override val display: String = "Missing return"
     }
 
     // Interpreter

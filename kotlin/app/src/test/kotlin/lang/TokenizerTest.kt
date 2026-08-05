@@ -155,4 +155,51 @@ class TokenizerTest {
             assertEquals(expected, tokens)
         }
     }
+
+    @Test
+    fun `tokenizes function declaration`() {
+        val input = "fun add(a: number, b: number) { }"
+        val tokens = tokenizerRun(input)
+        val expected = listOf(
+            Token(TokenValue.Fun, 1, 1),
+            Token(TokenValue.Ident("add"), 1, 5),
+            Token(TokenValue.LParen, 1, 8),
+            Token(TokenValue.Ident("a"), 1, 9),
+            Token(TokenValue.Colon, 1, 10),
+            Token(TokenValue.Type(VariableType.Number), 1, 12),
+            Token(TokenValue.Comma, 1, 18),
+            Token(TokenValue.Ident("b"), 1, 20),
+            Token(TokenValue.Colon, 1, 21),
+            Token(TokenValue.Type(VariableType.Number), 1, 23),
+            Token(TokenValue.RParen, 1, 29),
+            Token(TokenValue.LBrace, 1, 31),
+            Token(TokenValue.RBrace, 1, 33),
+        )
+        assertEquals(expected, tokens)
+    }
+
+    @Test
+    fun `tokenizes function call`() {
+        val input = "foo()"
+        val tokens = tokenizerRun(input)
+        val expected = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.LParen, 1, 4),
+            Token(TokenValue.RParen, 1, 5),
+        )
+        assertEquals(expected, tokens)
+    }
+
+    @Test
+    fun `tokenizes function call with arguments`() {
+        val input = "foo(x)"
+        val tokens = tokenizerRun(input)
+        val expected = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.LParen, 1, 4),
+            Token(TokenValue.Ident("x"), 1, 5),
+            Token(TokenValue.RParen, 1, 6),
+        )
+        assertEquals(expected, tokens)
+    }
 }
