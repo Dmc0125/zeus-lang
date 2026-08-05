@@ -810,4 +810,80 @@ class ParserTest {
             assertEquals(input.expected, result[0])
         }
     }
+
+    @Test
+    fun `parses function call as expression`() {
+        // x := foo(bar);
+        val tokens = listOf(
+            Token(TokenValue.Ident("x"), 1, 1),
+            Token(TokenValue.Colon, 1, 2),
+            Token(TokenValue.Equal, 1, 3),
+            Token(TokenValue.Ident("foo"), 1, 4),
+            Token(TokenValue.LParen, 1, 5),
+            Token(TokenValue.Ident("bar"), 1, 6),
+            Token(TokenValue.RParen, 1, 7),
+            Token(TokenValue.Semicolon, 1, 8),
+        )
+        val ast = Parser(tokens).parseProgram()
+        val expected = varDecl(
+            "x",
+            null,
+            call("foo", listOf(Expression(ExpressionType.Ident("bar"), 1, 6)), 1, 4),
+            1, 1,
+        )
+
+        assertEquals(ast.size, 1)
+        assertEquals(expected, ast[0])
+    }
+
+    @Test
+    fun `parses function call as statement`() {
+        // foo(bar);
+        val tokens = listOf(
+            Token(TokenValue.Ident("foo"), 1, 1),
+            Token(TokenValue.LParen, 1, 2),
+            Token(TokenValue.Ident("bar"), 1, 3),
+            Token(TokenValue.RParen, 1, 4),
+            Token(TokenValue.Semicolon, 1, 5),
+        )
+        val ast = Parser(tokens).parseProgram()
+        val expected = callStmt("foo", listOf(Expression(ExpressionType.Ident("bar"), 1, 3)), 1, 1)
+
+        assertEquals(ast.size, 1)
+        assertEquals(expected, ast[0])
+    }
+
+    @Test
+    fun `parses return statement without value`() {
+        // return
+        val tokens = listOf(
+            Token(TokenValue.Return, 1, 1),
+            Token(TokenValue.Semicolon, 1, 2),
+        )
+        val ast = Parser(tokens).parseProgram()
+        val expected = Statement(StatementType.Return(null), 1, 1)
+
+        assertEquals(ast.size, 1)
+        assertEquals(expected, ast[0])
+    }
+
+    @Test
+    fun `parses return statement with value`() {
+        // return 42;
+        val tokens = listOf(
+            Token(TokenValue.Return, 1, 1),
+            Token(TokenValue.NumberLiteral(42.0), 1, 2),
+            Token(TokenValue.Semicolon, 1, 3),
+        )
+        val ast = Parser(tokens).parseProgram()
+        val expected = Statement(
+            StatementType.Return(
+                Expression(ExpressionType.NumberLiteral(42.0), 1, 2),
+            ),
+            1, 1
+        )
+
+        assertEquals(ast.size, 1)
+        assertEquals(expected, ast[0])
+    }
 }

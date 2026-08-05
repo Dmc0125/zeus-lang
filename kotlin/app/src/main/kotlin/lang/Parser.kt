@@ -48,7 +48,9 @@ sealed interface StatementType {
         val body: Statement,
     ) : StatementType
 
-    data class Return(val value: Expression) : StatementType
+    data class Return(val value: Expression?) : StatementType
+
+    data class Call(val name: String, val args: List<Expression>) : StatementType
 }
 
 data class Node<T>(
@@ -87,6 +89,46 @@ class Parser(
         )
     }
 
+    fun parseCall(identToken: Token): Pair<String, List<Expression>> {
+        assert(identToken.value is TokenValue.Ident)
+
+        this.idx += 1 // skip ident and '('
+
+        val lparen = this.peekOrThrow()
+        check(lparen.value == TokenValue.LParen) {
+            throw LangError(lparen.line, lparen.col, ErrorType.Syntax, "Expected '('")
+        }
+        this.idx += 1 // skip '('
+
+        val args = mutableListOf<Expression>()
+
+        if (this.peekOrThrow().value == TokenValue.RParen) {
+            this.idx += 1
+        } else {
+            while (true) {
+                val expr = this.parseExpression()
+                args.add(expr)
+
+                val next = this.peekOrThrow()
+                when (next.value) {
+                    TokenValue.Comma -> {
+                        this.idx += 1
+                    }
+
+                    TokenValue.RParen -> {
+                        this.idx += 1
+                        break
+                    }
+
+                    else -> throw LangError(next.line, next.col, ErrorType.Syntax, "Expected ',' or ')'")
+                }
+            }
+        }
+
+        val ident = identToken.value as TokenValue.Ident
+        return Pair(ident.name, args)
+    }
+
     fun parsePrimary(): Expression {
         // primary => number | ident | string | bool | '(' expression ')' | call
         // call => ident '(' (expression (',' expression)*)? ')'
@@ -100,38 +142,11 @@ class Parser(
             }
 
             is TokenValue.Ident -> {
-                this.idx += 1 // skip indent
-
-                if (this.peekOrThrow().value == TokenValue.LParen) {
-                    this.idx += 1 // skip '('
-
-                    val args = mutableListOf<Expression>()
-
-                    if (this.peekOrThrow().value == TokenValue.RParen) {
-                        this.idx += 1
-                    } else {
-                        while (true) {
-                            val expr = this.parseExpression()
-                            args.add(expr)
-
-                            val next = this.peekOrThrow()
-                            when (next.value) {
-                                TokenValue.Comma -> {
-                                    this.idx += 1
-                                }
-
-                                TokenValue.RParen -> {
-                                    this.idx += 1
-                                    break
-                                }
-
-                                else -> throw LangError(next.line, next.col, ErrorType.Syntax, "Expected ',' or ')'")
-                            }
-                        }
-                    }
-
-                    Expression(ExpressionType.Call(token.value.name, args), token)
+                if (this.peekOrThrow(1).value == TokenValue.LParen) {
+                    val (name, args) = this.parseCall(token)
+                    Expression(ExpressionType.Call(name, args), token)
                 } else {
+                    this.idx += 1 // skip ident
                     Expression(ExpressionType.Ident(token.value.name), token)
                 }
             }
@@ -600,11 +615,38 @@ class Parser(
             }
             this.idx += 1 // skip '('
 
-            var count = 0;
+            if (this.peekOrThrow().value == TokenValue.RParen) {
+                this.idx += 1 // skip ')'
+                return@run
+            }
+
             while (true) {
                 val next = this.peekOrThrow()
+                check(next.value is TokenValue.Ident) {
+                    throw LangError(next.line, next.col, ErrorType.Syntax, "Expected parameter identifier")
+                }
 
-                when (next.value) {
+                val paramIdent = next.value
+                this.idx += 1 // skip ident
+
+                val colon = this.peekOrThrow()
+                check(colon.value == TokenValue.Colon) {
+                    throw LangError(colon.line, colon.col, ErrorType.Syntax, "Expected ':'")
+                }
+                this.idx += 1 // skip ':'
+
+                val type = this.peekOrThrow()
+                check(type.value is TokenValue.Type) {
+                    throw LangError(type.line, type.col, ErrorType.Syntax, "Expected type")
+                }
+                this.idx += 1 // skip type
+
+                params.add(
+                    FunctionParameter(paramIdent.name, type.value.type, next.line, next.col),
+                )
+
+                val comma = this.peekOrThrow()
+                when (comma.value) {
                     TokenValue.Comma -> {
                         this.idx += 1 // skip ','
                     }
@@ -614,28 +656,7 @@ class Parser(
                         break
                     }
 
-                    is TokenValue.Ident -> {
-                        val paramIdent = next.value
-                        this.idx += 1 // skip ident
-
-                        val colon = this.peekOrThrow()
-                        check(colon.value == TokenValue.Colon) {
-                            throw LangError(colon.line, colon.col, ErrorType.Syntax, "Expected ':'")
-                        }
-                        this.idx += 1 // skip ':'
-
-                        val type = this.peekOrThrow()
-                        check(type.value is TokenValue.Type) {
-                            throw LangError(type.line, type.col, ErrorType.Syntax, "Expected type")
-                        }
-                        this.idx += 1 // skip type
-
-                        params.add(
-                            FunctionParameter(paramIdent.name, type.value.type, next.line, next.col),
-                        )
-                    }
-
-                    else -> throw LangError(next.line, next.col, ErrorType.Syntax, "Expected parameter")
+                    else -> throw LangError(comma.line, comma.col, ErrorType.Syntax, "Expected ',' or ')'")
                 }
             }
         }
@@ -678,7 +699,15 @@ class Parser(
         val next = this.peekOrThrow()
 
         val (statement, requiresSemicolon) = when (next.value) {
-            is TokenValue.Ident -> Pair(this.parseIdentStatement(next), true)
+            is TokenValue.Ident -> {
+                if (this.peekOrThrow(1).value == TokenValue.LParen) {
+                    val (name, args) = this.parseCall(next)
+                    Pair(Statement(StatementType.Call(name, args), next.line, next.col), true)
+                } else {
+                    Pair(this.parseIdentStatement(next), true)
+                }
+            }
+
             is TokenValue.Print -> {
                 // print => 'print' expression
                 this.idx += 1
@@ -696,8 +725,14 @@ class Parser(
             is TokenValue.Fun -> Pair(this.parseFunctionDeclaration(next), false)
             is TokenValue.Return -> {
                 this.idx += 1 // skip return
-                val value = this.parseExpression()
-                Pair(Statement(StatementType.Return(value), next.line, next.col), true)
+
+                val semi = this.peekOrThrow()
+                var returnValue: Expression? = null
+                if (this.peekOrThrow().value != TokenValue.Semicolon) {
+                    returnValue = this.parseExpression()
+                }
+
+                Pair(Statement(StatementType.Return(returnValue), next.line, next.col), true)
             }
 
             TokenValue.Break -> {

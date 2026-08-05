@@ -90,6 +90,9 @@ fun returnStmt(
 fun call(name: String, args: List<Expression>, line: Int = 0, col: Int = 0): Expression =
     Expression(ExpressionType.Call(name, args), line, col)
 
+fun callStmt(name: String, args: List<Expression>, line: Int = 0, col: Int = 0): Statement =
+    Statement(StatementType.Call(name, args), line, col)
+
 class InterpreterTest {
     @Test
     fun `interprets unary`() {

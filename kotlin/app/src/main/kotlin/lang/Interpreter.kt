@@ -91,7 +91,7 @@ data class Function(
     val funcEnv: Environment<Function>,
 )
 
-class Return(val value: VariableValue) : Throwable("")
+class Return(val value: VariableValue?) : Throwable("")
 class Break() : Throwable("")
 class Continue() : Throwable("")
 
@@ -194,14 +194,47 @@ class Interpreter(
         }
     }
 
+    fun interpretCall(name: String, args: List<Expression>): VariableValue? {
+        var func = this.funcEnv.get(name)
+        assert(func != null) { "Function not declared" }
+
+        func = func!!
+
+        val funcVarEnv = Environment<VariableValue>()
+        for ((i, callArg) in args.withIndex()) {
+            val sigParam = func.params[i]
+            val value = this.interpretExpression(callArg)
+            funcVarEnv.declare(sigParam.name, value)
+        }
+
+        val prevVarEnv = this.varEnv
+        val prevFuncEnv = this.funcEnv
+
+        this.funcEnv = func.funcEnv
+        this.varEnv = funcVarEnv
+
+        var ret: VariableValue? = null
+
+        try {
+            for (stmt in func.body.statements) {
+                this.interpretStatement(stmt)
+            }
+        } catch (e: Return) {
+            ret = e.value
+        }
+
+        this.varEnv = prevVarEnv
+        this.funcEnv = prevFuncEnv
+
+        return ret
+    }
+
     fun interpretExpression(expr: Node<ExpressionType>): VariableValue {
         return when (expr.type) {
             is ExpressionType.Ident -> {
                 val ident = expr.type
                 val value = this.varEnv.get(ident.name)
-                if (value == null) {
-                    throw LangError(expr.line, expr.col, ErrorType.Type, ErrorMessage.Undefined)
-                }
+                check(value != null) { "Undefined: ${ident.name}" }
                 value
             }
 
@@ -212,39 +245,8 @@ class Interpreter(
             is ExpressionType.Binary -> this.interpretBinary(expr as Node<ExpressionType.Binary>)
             is ExpressionType.Call -> {
                 val call = expr.type
-
-                var func = this.funcEnv.get(call.name)
-                assert(func != null) { "Function not declared" }
-
-                func = func!!
-
-                val prevVarEnv = this.varEnv
-                val prevFuncEnv = this.funcEnv
-
-                this.funcEnv = func.funcEnv
-                this.varEnv = Environment<VariableValue>()
-                for ((i, callArg) in call.args.withIndex()) {
-                    val sigParam = func.params[i]
-                    val value = this.interpretExpression(callArg)
-                    this.varEnv.assign(sigParam.name, value)
-                }
-
-                var ret: VariableValue? = null
-
-                try {
-                    for (stmt in func.body.statements) {
-                        this.interpretStatement(stmt)
-                    }
-                } catch (e: Return) {
-                    ret = e.value
-                }
-
-                this.varEnv = prevVarEnv
-                this.funcEnv = prevFuncEnv
-
-                check(ret != null) { "unimplemented" }
-
-                ret
+                val ret = this.interpretCall(call.name, call.args)
+                ret!!
             }
         }
     }
@@ -349,6 +351,7 @@ class Interpreter(
                 val stmt = statement.type
 
                 this.varEnv = this.varEnv.child()
+                this.funcEnv = this.funcEnv.child()
 
                 if (stmt.init != null) {
                     this.interpretStatement(stmt.init)
@@ -402,8 +405,17 @@ class Interpreter(
             }
 
             is StatementType.Return -> {
-                val ret = this.interpretExpression(statement.type.value)
-                throw Return(ret)
+                if (statement.type.value != null) {
+                    val ret = this.interpretExpression(statement.type.value)
+                    throw Return(ret)
+                } else {
+                    throw Return(null)
+                }
+            }
+
+            is StatementType.Call -> {
+                val call = statement.type
+                this.interpretCall(call.name, call.args)
             }
         }
     }

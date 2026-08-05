@@ -7,6 +7,12 @@ data class FunctionSignature(
     var foundReturn: Boolean
 )
 
+// TODO: Implement return check on branches
+sealed interface ConditionFlow {
+    data object Through : ConditionFlow
+    data object Return : ConditionFlow
+}
+
 class Analyzer {
     var varEnv = Environment<VariableType>()
     var funcEnv = Environment<FunctionSignature>()
@@ -113,6 +119,29 @@ class Analyzer {
         }
     }
 
+    fun analyzeCall(line: Int, col: Int, name: String, args: List<Expression>): VariableType? {
+        var signature = this.funcEnv.get(name)
+        if (signature == null) {
+            throw LangError(line, col, ErrorType.Type, ErrorMessage.Undefined)
+        }
+        if (args.size != signature.params.size) {
+            throw LangError(line, col, ErrorType.Type, "Expected ${signature.params.size} arguments")
+        }
+
+        for ((i, callArg) in args.withIndex()) {
+            val argType = this.analyzeExpression(callArg)
+            val sigArg = signature.params[i]
+
+            if (sigArg.type != argType) {
+                throw LangError(
+                    callArg.line, callArg.col, ErrorType.Type,
+                    "Argument type mismatch",
+                )
+            }
+        }
+        return signature.ret
+    }
+
     fun analyzeExpression(expr: Expression): VariableType {
         return when (expr.type) {
             is ExpressionType.Ident -> {
@@ -130,30 +159,14 @@ class Analyzer {
             is ExpressionType.Binary -> this.analyzeBinary(expr as Node<ExpressionType.Binary>)
             is ExpressionType.Call -> {
                 val func = expr.type
-                var signature = this.funcEnv.get(func.name)
-                if (signature == null) {
-                    throw LangError(expr.line, expr.col, ErrorType.Type, ErrorMessage.Undefined)
+                val retType = this.analyzeCall(expr.line, expr.col, func.name, func.args)
+                check(retType != null) {
+                    throw LangError(
+                        expr.line, expr.col, ErrorType.Type,
+                        "Call as an expression must return a value",
+                    )
                 }
-                if (func.args.size != signature.params.size) {
-                    throw LangError(expr.line, expr.col, ErrorType.Type, "Expected ${signature.params.size} arguments")
-                }
-
-                for ((i, callArg) in func.args.withIndex()) {
-                    val argType = this.analyzeExpression(callArg)
-                    val sigArg = signature.params[i]
-
-                    if (sigArg.type != argType) {
-                        throw LangError(
-                            callArg.line, callArg.col, ErrorType.Type,
-                            "Argument type mismatch",
-                        )
-                    }
-                }
-
-                check(signature.ret != null) {
-                    "unimplmented"
-                }
-                signature.ret
+                retType
             }
         }
     }
@@ -175,7 +188,11 @@ class Analyzer {
         this.funcEnv = this.funcEnv.parent!!
     }
 
-    fun analyzeStatement(stmt: Statement, insideLoop: Boolean = false, function: FunctionSignature? = null) {
+    fun analyzeStatement(
+        stmt: Statement,
+        insideLoop: Boolean = false,
+        function: FunctionSignature? = null
+    ) {
         when (stmt.type) {
             is StatementType.VariableDeclaration -> {
                 val decl = stmt.type
@@ -349,12 +366,22 @@ class Analyzer {
                     throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.ReturnOutsideFunction)
                 }
 
-                val value = this.analyzeExpression(stmt.type.value)
-                check(value == function.ret) {
+                val ret = stmt.type
+                var retType: VariableType? = null
+                if (ret.value != null) {
+                    retType = this.analyzeExpression(ret.value)
+                }
+
+                check(retType == function.ret) {
                     throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.ReturnTypeMismatch)
                 }
 
                 function.foundReturn = true
+            }
+
+            is StatementType.Call -> {
+                val call = stmt.type
+                this.analyzeCall(stmt.line, stmt.col, call.name, call.args)
             }
         }
     }

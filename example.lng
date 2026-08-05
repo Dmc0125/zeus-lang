@@ -1,66 +1,12 @@
 x: number;
 
-y := 5;
-x = y + 10;
-
-println "";
-println y;
-
-t: bool;
-t = !true;
-
-t = "123";
-
-println t;
-
-println "before true";
-
-if true {
-    println true;
+fun add(a: number, b: number): number {
+    return a + b;
 }
 
-println "before false";
-
-if false {
-    println false;
-}
-
-println "after ifs";
-
-if false {
-} else if true {
-    println "else if true";
-}
-
-if false {
-} else {
-    println "else";
-}
-
-if true == true {
-    println "true == true";
-}
-
-if true == false {
-    println "true == false";
-}
-
-if true == true == true {
-    println "true == true == true";
-}
-
-if true == true == false {
-    println "true == true == false";
-}
-
-if "123" == "123" {
-    println "123 == 123";
-}
-
-if true && "123" == "123" {
-    println "true && 123 == 123";
-}
-
-if false || true {
-    println "false || true";
+for i := 0; i < 10; i += 1 {
+    x = add(x, i);
+    if x > 10 {
+        println x;
+    }
 }
