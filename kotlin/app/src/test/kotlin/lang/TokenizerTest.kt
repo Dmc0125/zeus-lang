@@ -202,4 +202,20 @@ class TokenizerTest {
         )
         assertEquals(expected, tokens)
     }
+
+    @Test
+    fun `handles comments`() {
+        val input = """
+            x := 1 // 1
+            // 123
+        """
+        val tokens = tokenizerRun(input)
+        val expected = listOf(
+            Token(TokenValue.Ident("x"), 2, 13),
+            Token(TokenValue.Colon, 2, 15),
+            Token(TokenValue.Equal, 2, 16),
+            Token(TokenValue.NumberLiteral(1.0), 2, 18),
+        )
+        assertEquals(expected, tokens)
+    }
 }

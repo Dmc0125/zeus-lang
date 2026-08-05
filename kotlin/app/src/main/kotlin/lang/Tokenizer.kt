@@ -113,7 +113,6 @@ fun tokenizerRun(input: String): List<Token> {
             '+' -> tokens.add(Token(TokenValue.Plus, line, col))
             '-' -> tokens.add(Token(TokenValue.Minus, line, col))
             '*' -> tokens.add(Token(TokenValue.Star, line, col))
-            '/' -> tokens.add(Token(TokenValue.Slash, line, col))
             ',' -> tokens.add(Token(TokenValue.Comma, line, col))
             ';' -> tokens.add(Token(TokenValue.Semicolon, line, col))
             ':' -> tokens.add(Token(TokenValue.Colon, line, col))
@@ -142,6 +141,29 @@ fun tokenizerRun(input: String): List<Token> {
                     col += 1
                 } else {
                     throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
+                }
+            }
+
+            '/' -> {
+                if (peek(1) == '/') {
+                    idx += 2
+                    while (true) {
+                        val next = peek()
+                        idx += 1
+                        when (next) {
+                            null -> break
+                            '\n' -> {
+                                line += 1
+                                col = 1
+                                break
+                            }
+
+                            else -> {}
+                        }
+                    }
+                    continue
+                } else {
+                    tokens.add(Token(TokenValue.Slash, line, col))
                 }
             }
 
