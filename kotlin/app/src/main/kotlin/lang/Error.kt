@@ -38,6 +38,7 @@ sealed interface ErrorMessage {
     }
 
     // Parser
+
     data object UnexpectedEndOfInput : ErrorMessage {
         override val display: String = "Unexpected end of input"
     }
@@ -50,18 +51,6 @@ sealed interface ErrorMessage {
 
     data object Undefined : ErrorMessage {
         override val display: String = "Undefined"
-    }
-
-    data object UndefinedVariable : ErrorMessage {
-        override val display: String = "Undefined variable"
-    }
-
-    data object VariableAlreadyDefined : ErrorMessage {
-        override val display: String = "Variable already defined"
-    }
-
-    data object FunctionAlreadyDeclared : ErrorMessage {
-        override val display: String = "Function already declared"
     }
 
     data object TypeNotSpecified : ErrorMessage {

@@ -39,7 +39,7 @@ class AnalyzerTest {
         val exception = assertFailsWith(LangError::class) {
             runPipeline(program)
         }
-        val expected = LangError(3, 13, ErrorType.Type, ErrorMessage.FunctionAlreadyDeclared)
+        val expected = LangError(3, 13, ErrorType.Type, ErrorMessage.AlreadyDeclared)
         assertEquals(expected, exception)
     }
 
@@ -90,7 +90,7 @@ class AnalyzerTest {
         val exception = assertFailsWith(LangError::class) {
             runPipeline(program)
         }
-        val expected = LangError(1, 6, ErrorType.Type, "Function not declared")
+        val expected = LangError(1, 6, ErrorType.Type, ErrorMessage.Undefined)
         assertEquals(expected, exception)
     }
 

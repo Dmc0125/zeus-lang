@@ -92,6 +92,8 @@ data class Function(
 )
 
 class Return(val value: VariableValue) : Throwable("")
+class Break() : Throwable("")
+class Continue() : Throwable("")
 
 class Interpreter(
     val printer: BufferedPrinter? = null,
@@ -247,10 +249,6 @@ class Interpreter(
         }
     }
 
-    var insideLoop = false
-    var shouldBreak = false
-    var shouldContinue = false
-
     fun interpretBlock(statement: Statement) {
         assert(statement.type is StatementType.Block) {
             "Expected block statement, got ${statement.type}"
@@ -263,9 +261,6 @@ class Interpreter(
 
         for (statement in block.statements) {
             this.interpretStatement(statement)
-            if (this.insideLoop && (this.shouldBreak || this.shouldContinue)) {
-                break
-            }
         }
 
         this.varEnv = this.varEnv.parent!!
@@ -330,8 +325,6 @@ class Interpreter(
                 val forStmt = statement.type
 
                 while (true) {
-                    this.insideLoop = true
-
                     if (forStmt.condition != null) {
                         var cond = this.interpretExpression(forStmt.condition)
                         assert(cond is VariableValue.Bool) {
@@ -343,30 +336,25 @@ class Interpreter(
                         }
                     }
 
-                    this.interpretBlock(forStmt.body)
-
-                    if (this.shouldBreak) {
-                        this.shouldBreak = false
+                    try {
+                        this.interpretBlock(forStmt.body)
+                    } catch (e: Break) {
                         break
-                    }
-                    if (this.shouldContinue) {
-                        this.shouldContinue = false
+                    } catch (e: Continue) {
                     }
                 }
-
-                this.insideLoop = false
             }
 
             is StatementType.CFor -> {
                 val stmt = statement.type
+
+                this.varEnv = this.varEnv.child()
 
                 if (stmt.init != null) {
                     this.interpretStatement(stmt.init)
                 }
 
                 while (true) {
-                    this.insideLoop = true
-
                     if (stmt.condition != null) {
                         var cond = this.interpretExpression(stmt.condition)
                         assert(cond is VariableValue.Bool) {
@@ -378,14 +366,11 @@ class Interpreter(
                         }
                     }
 
-                    this.interpretBlock(stmt.body)
-
-                    if (this.shouldBreak) {
-                        this.shouldBreak = false
+                    try {
+                        this.interpretBlock(stmt.body)
+                    } catch (e: Break) {
                         break
-                    }
-                    if (this.shouldContinue) {
-                        this.shouldContinue = false
+                    } catch (e: Continue) {
                     }
 
                     if (stmt.update != null) {
@@ -393,16 +378,12 @@ class Interpreter(
                     }
                 }
 
-                this.insideLoop = false
+                this.varEnv = this.varEnv.parent!!
+                this.funcEnv = this.funcEnv.parent!!
             }
 
-            StatementType.Break -> {
-                this.shouldBreak = true
-            }
-
-            StatementType.Continue -> {
-                this.shouldContinue = true
-            }
+            StatementType.Break -> throw Break()
+            StatementType.Continue -> throw Continue()
 
             is StatementType.FunctionDeclaration -> {
                 val decl = statement.type

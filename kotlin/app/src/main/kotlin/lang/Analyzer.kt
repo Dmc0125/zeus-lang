@@ -4,52 +4,12 @@ data class FunctionSignature(
     val params: List<FunctionParameter>,
     val ret: VariableType?,
 
-    var hasReturn: Boolean
+    var foundReturn: Boolean
 )
 
-class AnalyzerEnvironment() {
-    val variables: MutableMap<String, VariableType> = mutableMapOf()
-    val functions: MutableMap<String, FunctionSignature> = mutableMapOf()
-
-    fun declare(name: String, type: VariableType): LangError? {
-        if (variables.containsKey(name)) {
-            return LangError(0, 0, ErrorType.Type, ErrorMessage.VariableAlreadyDefined)
-        }
-        variables[name] = type
-        return null
-    }
-
-    fun declare(name: String, func: FunctionSignature): LangError? {
-        if (functions.containsKey(name)) {
-            return LangError(0, 0, ErrorType.Type, ErrorMessage.FunctionAlreadyDeclared)
-        }
-        functions[name] = func
-        return null
-    }
-
-    fun assign(name: String, type: VariableType): LangError? {
-        if (!variables.containsKey(name)) {
-            return LangError(0, 0, ErrorType.Type, ErrorMessage.UndefinedVariable)
-        }
-
-        if (variables[name] != type) {
-            return LangError(0, 0, ErrorType.Type, "Type mismatch : ${variables[name]} != ${type}")
-        }
-
-        return null
-    }
-
-    fun get(name: String): VariableType? {
-        return variables[name]
-    }
-
-    fun getFunction(name: String): FunctionSignature? {
-        return functions[name]
-    }
-}
-
 class Analyzer {
-    val stack: MutableList<AnalyzerEnvironment> = mutableListOf(AnalyzerEnvironment())
+    var varEnv = Environment<VariableType>()
+    var funcEnv = Environment<FunctionSignature>()
 
     fun analyzeUnary(expression: Node<ExpressionType.Unary>): VariableType {
         val unary = expression.type
@@ -157,15 +117,10 @@ class Analyzer {
         return when (expr.type) {
             is ExpressionType.Ident -> {
                 val ident = expr.type
-                for (stackEnv in this.stack.asReversed()) {
-                    stackEnv.get(ident.name)?.let { return it }
+                this.varEnv.get(ident.name)?.let {
+                    return it
                 }
-                throw LangError(
-                    expr.line,
-                    expr.col,
-                    ErrorType.Type,
-                    ErrorMessage.UndefinedVariable
-                )
+                throw LangError(expr.line, expr.col, ErrorType.Type, ErrorMessage.Undefined)
             }
 
             is ExpressionType.NumberLiteral -> VariableType.Number
@@ -175,14 +130,9 @@ class Analyzer {
             is ExpressionType.Binary -> this.analyzeBinary(expr as Node<ExpressionType.Binary>)
             is ExpressionType.Call -> {
                 val func = expr.type
-
-                var signature: FunctionSignature? = null
-                for (stackEnv in this.stack.asReversed()) {
-                    signature = stackEnv.getFunction(func.name)
-                }
-
+                var signature = this.funcEnv.get(func.name)
                 if (signature == null) {
-                    throw LangError(expr.line, expr.col, ErrorType.Type, "Function not declared")
+                    throw LangError(expr.line, expr.col, ErrorType.Type, ErrorMessage.Undefined)
                 }
                 if (func.args.size != signature.params.size) {
                     throw LangError(expr.line, expr.col, ErrorType.Type, "Expected ${signature.params.size} arguments")
@@ -214,18 +164,21 @@ class Analyzer {
         val stmts = (block.type as StatementType.Block).statements
         if (stmts.isEmpty()) return
 
-        this.stack.add(AnalyzerEnvironment())
+        this.varEnv = this.varEnv.child()
+        this.funcEnv = this.funcEnv.child()
+
         for (stmt in stmts) {
             this.analyzeStatement(stmt, insideLoop, function)
         }
-        this.stack.removeLast()
+
+        this.varEnv = this.varEnv.parent!!
+        this.funcEnv = this.funcEnv.parent!!
     }
 
     fun analyzeStatement(stmt: Statement, insideLoop: Boolean = false, function: FunctionSignature? = null) {
         when (stmt.type) {
             is StatementType.VariableDeclaration -> {
                 val decl = stmt.type
-                val scope = this.stack[this.stack.size - 1]
 
                 var valueType: VariableType?
                 if (decl.value == null) {
@@ -246,33 +199,15 @@ class Analyzer {
                     throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.TypeNotSpecified)
                 }
 
-                scope.declare(decl.name, valueType)?.let {
-                    it.line = stmt.line
-                    it.col = stmt.col
-                    throw it
+                this.varEnv.declare(decl.name, valueType)?.let {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, it)
                 }
             }
 
             is StatementType.VariableAssignment -> {
                 val assignment = stmt.type
-                var found = false
-
-                for (stackEnv in this.stack) {
-                    if (stackEnv.variables.containsKey(assignment.name)) {
-                        val valueType = this.analyzeExpression(assignment.value)
-
-                        stackEnv.assign(assignment.name, valueType)?.let {
-                            it.line = stmt.line
-                            it.col = stmt.col
-                            throw it
-                        }
-
-                        found = true
-                    }
-                }
-
-                if (!found) {
-                    throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.UndefinedVariable)
+                this.varEnv.assign(assignment.name, this.analyzeExpression(assignment.value))?.let {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, it)
                 }
             }
 
@@ -311,8 +246,7 @@ class Analyzer {
             is StatementType.CFor -> {
                 val stmt = stmt.type
 
-                // NOTE: declaration inside init should only be visible to for loop
-                this.stack.add(AnalyzerEnvironment())
+                this.varEnv = this.varEnv.child()
 
                 if (stmt.init != null) {
                     check(stmt.init.type is StatementType.VariableDeclaration) {
@@ -348,7 +282,7 @@ class Analyzer {
 
                 this.analyzeBlock(stmt.body, true, function)
 
-                this.stack.removeLast()
+                this.varEnv = this.varEnv.parent!!
             }
 
             StatementType.Break -> {
@@ -375,23 +309,38 @@ class Analyzer {
                     )
                 }
 
-                val signature = FunctionSignature(func.params, func.ret, false)
-                this.analyzeBlock(func.body, false, signature)
+                val oldVarEnv = this.varEnv
+                val oldFuncEnv = this.funcEnv
 
-                if (func.ret != null && !signature.hasReturn) {
-                    throw LangError(
-                        stmt.line,
-                        stmt.col,
-                        ErrorType.Syntax,
-                        ErrorMessage.MissingReturn,
-                    )
+                // Create a new scope for the function - do not allow closure
+                this.varEnv = Environment<VariableType>()
+                this.funcEnv = this.funcEnv.child()
+
+                // Declare function parameters in the new scope
+                for (param in func.params) {
+                    this.varEnv.declare(param.name, param.type)?.let {
+                        throw LangError(param.line, param.col, ErrorType.Syntax, it)
+                    }
                 }
 
-                val scope = this.stack[this.stack.size - 1]
-                scope.declare(func.name, signature)?.let {
-                    it.line = stmt.line
-                    it.col = stmt.col
-                    throw it
+                val signature = FunctionSignature(func.params, func.ret, false)
+
+                // validate body statements
+                val body = func.body.type as StatementType.Block
+                for (stmt in body.statements) {
+                    this.analyzeStatement(stmt, false, signature)
+                }
+
+                // validate return type
+                if (func.ret != null && !signature.foundReturn) {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.MissingReturn)
+                }
+
+                this.varEnv = oldVarEnv
+                this.funcEnv = oldFuncEnv
+
+                this.funcEnv.declare(func.name, signature)?.let {
+                    throw LangError(stmt.line, stmt.col, ErrorType.Type, it)
                 }
             }
 
@@ -405,7 +354,7 @@ class Analyzer {
                     throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.ReturnTypeMismatch)
                 }
 
-                function.hasReturn = true
+                function.foundReturn = true
             }
         }
     }

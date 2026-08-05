@@ -290,7 +290,7 @@ class InterpreterTest {
 
     @Test
     fun `interprets function call`() {
-        // fun foo() {
+        // fun foo(): number {
         //  return 5;
         // }
         // x := foo();
