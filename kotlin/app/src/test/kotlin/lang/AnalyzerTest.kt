@@ -171,4 +171,45 @@ class AnalyzerFunction : AnalyzerTest() {
         """
         runPipeline(program)
     }
+
+    @Test
+    fun `throws if a branch is missing return`() {
+        val program = """
+            fun foo(): number {
+                if (true) {
+                    return 123;
+                }
+            }
+        """
+        val exception = assertFailsWith(LangError::class) {
+            runPipeline(program)
+        }
+        val expected = LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn)
+        assertEquals(expected, exception)
+    }
+
+    @Test
+    fun `does not throw if return is followed by other statements`() {
+        val program = """
+            fun foo(): number {
+                x := 123;
+                return 123;
+                println x;
+            }
+        """
+        runPipeline(program)
+    }
+
+    @Test
+    fun `does not throw if all branches return`() {
+        val program = """
+            fun foo(): number {
+                if (true) {
+                    return 123;
+                }
+                return 456;
+            }
+        """
+        runPipeline(program)
+    }
 }

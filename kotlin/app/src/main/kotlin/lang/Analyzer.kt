@@ -1,17 +1,15 @@
 package lang
 
+sealed interface ConditionFlow {
+    data object FallsThrough : ConditionFlow
+    data object Returns : ConditionFlow
+}
+
 data class FunctionSignature(
     val params: List<FunctionParameter>,
     val ret: VariableType?,
-
-    var foundReturn: Boolean
+    var flow: ConditionFlow = ConditionFlow.FallsThrough
 )
-
-// TODO: Implement return check on branches
-sealed interface ConditionFlow {
-    data object Through : ConditionFlow
-    data object Return : ConditionFlow
-}
 
 class Analyzer {
     var varEnv = Environment<VariableType>()
@@ -171,7 +169,11 @@ class Analyzer {
         }
     }
 
-    fun analyzeBlock(block: Statement, insideLoop: Boolean = false, function: FunctionSignature? = null) {
+    fun analyzeBlock(
+        block: Statement,
+        insideLoop: Boolean = false,
+        function: FunctionSignature? = null
+    ) {
         assert(block.type is StatementType.Block) { "Expected block, got ${block.type}" }
 
         val stmts = (block.type as StatementType.Block).statements
@@ -229,6 +231,7 @@ class Analyzer {
             }
 
             is StatementType.Print -> this.analyzeExpression(stmt.type.expression)
+
             is StatementType.Block -> this.analyzeBlock(stmt, insideLoop, function)
 
             is StatementType.If -> {
@@ -243,8 +246,22 @@ class Analyzer {
                 }
 
                 this.analyzeBlock(stmt.type.thenBranch, insideLoop, function)
-                if (stmt.type.elseBranch != null) {
+                val elseBranch = stmt.type.elseBranch
+
+                if (elseBranch == null) {
+                    if (function != null) {
+                        function.flow = ConditionFlow.FallsThrough
+                    }
+                } else {
+                    // if one of the branches is fall through, the flow is fall through
+                    var thenFlow = function?.flow ?: ConditionFlow.FallsThrough
                     this.analyzeStatement(stmt.type.elseBranch, insideLoop, function)
+
+                    if (function != null) {
+                        if (thenFlow == ConditionFlow.FallsThrough || function.flow == ConditionFlow.FallsThrough) {
+                            function.flow = ConditionFlow.FallsThrough
+                        }
+                    }
                 }
             }
 
@@ -340,16 +357,18 @@ class Analyzer {
                     }
                 }
 
-                val signature = FunctionSignature(func.params, func.ret, false)
+                val signature = FunctionSignature(func.params, func.ret)
 
                 // validate body statements
+
                 val body = func.body.type as StatementType.Block
                 for (stmt in body.statements) {
                     this.analyzeStatement(stmt, false, signature)
                 }
 
-                // validate return type
-                if (func.ret != null && !signature.foundReturn) {
+                // validate return
+
+                if (func.ret != null && signature.flow != ConditionFlow.Returns) {
                     throw LangError(stmt.line, stmt.col, ErrorType.Syntax, ErrorMessage.MissingReturn)
                 }
 
@@ -376,7 +395,7 @@ class Analyzer {
                     throw LangError(stmt.line, stmt.col, ErrorType.Type, ErrorMessage.ReturnTypeMismatch)
                 }
 
-                function.foundReturn = true
+                function.flow = ConditionFlow.Returns
             }
 
             is StatementType.Call -> {
