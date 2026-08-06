@@ -69,12 +69,16 @@ class Environment<T>(val parent: Environment<T>? = null) {
         return null
     }
 
-    fun assign(name: String, value: T): ErrorMessage? {
+    fun assign(name: String, value: T, compareTypes: ((T) -> Unit)? = null): ErrorMessage? {
         if (!scope.contains(name)) {
             if (parent != null) {
                 return parent.assign(name, value)
             }
             return ErrorMessage.Undefined
+        }
+        val existing = scope[name]!!
+        if (compareTypes != null) {
+            compareTypes(existing)
         }
         scope[name] = value
         return null

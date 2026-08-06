@@ -6,7 +6,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes expressions`() {
         val input = "5 + 2 / 10 *6 || -0 && == \"123\" != true && false"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
 
         val expected = listOf(
             Token(TokenValue.NumberLiteral(5.0), 1, 1),
@@ -37,7 +37,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes literals`() {
         val input = "5 5.0 \"hello\" true false x"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
 
         val expected = listOf(
             Token(TokenValue.NumberLiteral(5.0), 1, 1),
@@ -57,7 +57,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes operators`() {
         val input = "- + / : = == != && || < <= > >= * ! ( ) {}"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
 
         val expected = listOf(
             Token(TokenValue.Minus, 1, 1),
@@ -90,7 +90,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes keywords`() {
         val input = "if else for print println number string bool break continue"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
 
         val expected = listOf(
             Token(TokenValue.If, 1, 1),
@@ -114,41 +114,45 @@ class TokenizerTest {
     @Test
     fun `throws on invalid number`() {
         val input = "123.45.67"
-        val exception = assertFailsWith(LangError::class) {
-            tokenizerRun(input)
-        }
+        val tokenizer = Tokenizer(input)
+        tokenizer.run()
+
         val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.InvalidNumber)
-        assertEquals(expected, exception)
+        assertEquals(listOf(expected), tokenizer.errors)
     }
 
     @Test
     fun `throws on unexpected character`() {
         val input = "@"
-        val exception = assertFailsWith(LangError::class) {
-            tokenizerRun(input)
-        }
-        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
-        assertEquals(expected, exception)
+        val tokenizer = Tokenizer(input)
+        tokenizer.run()
+
+        val errorMessage = tokenizer.errorMessage()
+        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.UnexpectedToken).construct(input)
+        assertEquals(expected, errorMessage)
     }
 
     @Test
     fun `handles newline in string`() {
         run {
             val input = """ "
-                hello
-                world
+                hello world
             " """
-            val exception = assertFailsWith(LangError::class) {
-                tokenizerRun(input)
-            }
-            val expected = LangError(1, 3, ErrorType.Syntax, ErrorMessage.StringContainsNewline)
-            assertEquals(expected, exception)
+            val tokenizer = Tokenizer(input)
+            tokenizer.run()
+
+            assertEquals(2, tokenizer.errors.size)
+            val expected = listOf(
+                LangError(1, 3, ErrorType.Syntax, ErrorMessage.StringContainsNewline),
+                LangError(2, 29, ErrorType.Syntax, ErrorMessage.StringContainsNewline)
+            )
+            assertEquals(expected, tokenizer.errors)
         }
 
         run {
             // should not throw
             val input = """"hello\nworld""""
-            val tokens = tokenizerRun(input)
+            val tokens = Tokenizer(input).run()
             val expected = listOf(
                 Token(TokenValue.StringLiteral("hello\\nworld"), 1, 1),
             )
@@ -159,7 +163,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes function declaration`() {
         val input = "fun add(a: number, b: number) { }"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
         val expected = listOf(
             Token(TokenValue.Fun, 1, 1),
             Token(TokenValue.Ident("add"), 1, 5),
@@ -181,7 +185,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes function call`() {
         val input = "foo()"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
         val expected = listOf(
             Token(TokenValue.Ident("foo"), 1, 1),
             Token(TokenValue.LParen, 1, 4),
@@ -193,7 +197,7 @@ class TokenizerTest {
     @Test
     fun `tokenizes function call with arguments`() {
         val input = "foo(x)"
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
         val expected = listOf(
             Token(TokenValue.Ident("foo"), 1, 1),
             Token(TokenValue.LParen, 1, 4),
@@ -209,7 +213,7 @@ class TokenizerTest {
             x := 1 // 1
             // 123
         """
-        val tokens = tokenizerRun(input)
+        val tokens = Tokenizer(input).run()
         val expected = listOf(
             Token(TokenValue.Ident("x"), 2, 13),
             Token(TokenValue.Colon, 2, 15),

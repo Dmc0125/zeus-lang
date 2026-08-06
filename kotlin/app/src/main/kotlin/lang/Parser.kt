@@ -765,13 +765,59 @@ class Parser(
         return statement
     }
 
-    fun parseProgram(): MutableList<Statement> {
+    fun parseProgram(): Pair<List<Statement>, List<LangError>> {
         var statements: MutableList<Statement> = mutableListOf()
+        val errors = mutableListOf<LangError>()
 
         while (this.idx < this.tokens.size) {
-            statements += this.parseStatement()
+            try {
+                statements.add(this.parseStatement())
+            } catch (e: LangError) {
+                errors.add(e)
+                // TODO: this may cause errors to be skipped
+                this.idx += 1
+
+                while (true) {
+                    val next = this.peek()
+
+                    when (next?.value) {
+                        null -> return Pair(statements, errors)
+                        TokenValue.Semicolon -> {
+                            this.idx += 1
+                            break
+                        }
+
+                        TokenValue.If,
+                        TokenValue.Else,
+                        TokenValue.For,
+                        TokenValue.Fun -> {
+                            break
+                        }
+
+                        is TokenValue.Ident -> {
+                            when (this.peek(1)?.value) {
+                                null -> {
+                                    return Pair(statements, errors)
+                                }
+
+                                TokenValue.Colon, TokenValue.Equal -> {
+                                    break
+                                }
+
+                                else -> {
+                                    this.idx += 1
+                                }
+                            }
+                        }
+
+                        else -> {
+                            this.idx += 1
+                        }
+                    }
+                }
+            }
         }
 
-        return statements
+        return Pair(statements, errors)
     }
 }

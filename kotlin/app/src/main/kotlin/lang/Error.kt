@@ -89,6 +89,10 @@ sealed interface ErrorMessage {
         override val display: String = "Missing return"
     }
 
+    data object TypeMismatch : ErrorMessage {
+        override val display: String = "Type mismatch"
+    }
+
     // Interpreter
 
     data object DivisionByZero : ErrorMessage {
@@ -130,4 +134,8 @@ data class LangError(
             append("^ -> $message\n")
         }
     }
+}
+
+fun createMessage(source: String, errors: List<LangError>): String {
+    return errors.joinToString("\n") { it.construct(source) }
 }

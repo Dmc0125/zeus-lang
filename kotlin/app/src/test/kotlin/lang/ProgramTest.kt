@@ -4,10 +4,21 @@ import kotlin.test.*
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 
+class Errors(val errors: List<LangError>) : Throwable()
+
 fun runPipeline(output: PrintStream, program: String): Interpreter {
-    val tokens = tokenizerRun(program)
+    val tokenizer = Tokenizer(program)
+    val tokens = tokenizer.run()
+    if (tokenizer.errors.isNotEmpty()) {
+        throw Errors(tokenizer.errors)
+    }
+
     val parser = Parser(tokens)
-    val ast = parser.parseProgram()
+    val (ast, parserErrors) = parser.parseProgram()
+    if (parserErrors.isNotEmpty()) {
+        throw Errors(parserErrors)
+    }
+
     val analyzer = Analyzer()
     analyzer.analyzeProgram(ast)
 

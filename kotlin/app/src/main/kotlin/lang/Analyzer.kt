@@ -230,7 +230,16 @@ class Analyzer {
 
             is StatementType.VariableAssignment -> {
                 val assignment = stmt.type
-                this.varEnv.assign(assignment.name, this.analyzeExpression(assignment.value))?.let {
+                val valueType = this.analyzeExpression(assignment.value)
+
+                this.varEnv.assign(assignment.name, valueType) {
+                    if (it != valueType) throw LangError(
+                        assignment.value.line,
+                        assignment.value.col,
+                        ErrorType.Type,
+                        "Type mismatch: expected $it, got $valueType"
+                    )
+                }?.let {
                     throw LangError(stmt.line, stmt.col, ErrorType.Type, it)
                 }
             }
@@ -427,9 +436,17 @@ class Analyzer {
         }
     }
 
-    fun analyzeProgram(statements: List<Statement>) {
+    fun analyzeProgram(statements: List<Statement>): List<LangError> {
+        val errors = mutableListOf<LangError>()
+
         for (statement in statements) {
-            this.analyzeStatement(statement)
+            try {
+                this.analyzeStatement(statement)
+            } catch (e: LangError) {
+                errors.add(e)
+            }
         }
+
+        return errors
     }
 }

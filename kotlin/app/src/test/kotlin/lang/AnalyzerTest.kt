@@ -4,9 +4,19 @@ import kotlin.test.*
 
 open class AnalyzerTest {
     fun runPipeline(program: String) {
-        val tokens = tokenizerRun(program)
-        val ast = Parser(tokens).parseProgram()
-        Analyzer().analyzeProgram(ast)
+        val tokenizer = Tokenizer(program)
+        val tokens = tokenizer.run()
+        if (tokenizer.errors.isNotEmpty()) {
+            throw Errors(tokenizer.errors)
+        }
+        val (ast, parserErrors) = Parser(tokens).parseProgram()
+        if (parserErrors.isNotEmpty()) {
+            throw Errors(parserErrors)
+        }
+        val analyzerErrors = Analyzer().analyzeProgram(ast)
+        if (analyzerErrors.isNotEmpty()) {
+            throw Errors(analyzerErrors)
+        }
     }
 }
 
@@ -14,21 +24,25 @@ class AnalyzerLoop : AnalyzerTest() {
     @Test
     fun `throws at break outside loop`() {
         val program = "break;"
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(1, 1, ErrorType.Syntax, ErrorMessage.BreakOutsideLoop))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.BreakOutsideLoop)
-        assertEquals(expected, exception)
     }
 
     @Test
     fun `throws at continue outside loop`() {
         val program = "continue;"
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(1, 1, ErrorType.Syntax, ErrorMessage.ContinueOutsideLoop))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(1, 1, ErrorType.Syntax, ErrorMessage.ContinueOutsideLoop)
-        assertEquals(expected, exception)
     }
 }
 
@@ -39,11 +53,13 @@ class AnalyzerFunction : AnalyzerTest() {
             fun foo() {}
             fun foo() {}
         """
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(3, 13, ErrorType.Type, ErrorMessage.AlreadyDeclared))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(3, 13, ErrorType.Type, ErrorMessage.AlreadyDeclared)
-        assertEquals(expected, exception)
     }
 
     @Test
@@ -54,11 +70,9 @@ class AnalyzerFunction : AnalyzerTest() {
             VariableType.Number,
             block(listOf(returnStmt(str("123")))),
         )
-        val exception = assertFailsWith(LangError::class) {
-            Analyzer().analyzeProgram(listOf(input))
-        }
-        val expected = LangError(0, 0, ErrorType.Type, ErrorMessage.ReturnTypeMismatch)
-        assertEquals(expected, exception)
+        val errors = Analyzer().analyzeProgram(listOf(input))
+        val expected = listOf(LangError(0, 0, ErrorType.Type, ErrorMessage.ReturnTypeMismatch))
+        assertEquals(expected, errors)
     }
 
     @Test
@@ -80,21 +94,25 @@ class AnalyzerFunction : AnalyzerTest() {
             fun foo(): number {
             }
         """
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn)
-        assertEquals(expected, exception)
     }
 
     @Test
     fun `throws on unknown function call`() {
         val program = "x := foo();"
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(1, 6, ErrorType.Type, ErrorMessage.Undefined))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(1, 6, ErrorType.Type, ErrorMessage.Undefined)
-        assertEquals(expected, exception)
     }
 
     @Test
@@ -103,11 +121,13 @@ class AnalyzerFunction : AnalyzerTest() {
             fun foo(x: number) { }
             x := foo();
         """
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(3, 18, ErrorType.Type, "Expected 1 arguments"))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(3, 18, ErrorType.Type, "Expected 1 arguments")
-        assertEquals(expected, exception)
     }
 
     @Test
@@ -117,11 +137,13 @@ class AnalyzerFunction : AnalyzerTest() {
             fun foo(y: string) { }
             z := foo(x);
         """
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = listOf(LangError(4, 22, ErrorType.Type, "Argument type mismatch"))
+            assertEquals(expected, e.errors)
         }
-        val expected = LangError(4, 22, ErrorType.Type, "Argument type mismatch")
-        assertEquals(expected, exception)
     }
 
     @Test
@@ -155,10 +177,13 @@ class AnalyzerFunction : AnalyzerTest() {
 
         for (input in inputs) {
             println("Running test: ${input.name}")
-            val exception = assertFailsWith(LangError::class) {
+            try {
                 runPipeline(input.input)
+                fail("Expected Errors to be thrown")
+            } catch (e: Errors) {
+                val expected = listOf(input.expected)
+                assertEquals(expected, e.errors)
             }
-            assertEquals(input.expected, exception)
         }
     }
 
@@ -181,11 +206,13 @@ class AnalyzerFunction : AnalyzerTest() {
                 }
             }
         """
-        val exception = assertFailsWith(LangError::class) {
+        try {
             runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn)
+            assertEquals(expected, e.errors[0])
         }
-        val expected = LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn)
-        assertEquals(expected, exception)
     }
 
     @Test
@@ -225,5 +252,23 @@ class AnalyzerFunction : AnalyzerTest() {
             }
         """
         runPipeline(program)
+    }
+
+    @Test
+    fun `throws if return is missing after loop with break`() {
+        val program = """
+            fun foo(): number {
+                for true {
+                    break;
+                }
+            }
+        """
+        try {
+            runPipeline(program)
+            fail("Expected Errors to be thrown")
+        } catch (e: Errors) {
+            val expected = LangError(2, 13, ErrorType.Syntax, ErrorMessage.MissingReturn)
+            assertEquals(expected, e.errors[0])
+        }
     }
 }

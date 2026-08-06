@@ -805,7 +805,7 @@ class ParserTest {
 
         for (input in inputs) {
             println("Starting test for ${input.name}")
-            val result = Parser(input.tokens).parseProgram()
+            val (result, _) = Parser(input.tokens).parseProgram()
             assertEquals(result.size, 1)
             assertEquals(input.expected, result[0])
         }
@@ -824,7 +824,7 @@ class ParserTest {
             Token(TokenValue.RParen, 1, 7),
             Token(TokenValue.Semicolon, 1, 8),
         )
-        val ast = Parser(tokens).parseProgram()
+        val (ast, _) = Parser(tokens).parseProgram()
         val expected = varDecl(
             "x",
             null,
@@ -846,7 +846,7 @@ class ParserTest {
             Token(TokenValue.RParen, 1, 4),
             Token(TokenValue.Semicolon, 1, 5),
         )
-        val ast = Parser(tokens).parseProgram()
+        val (ast, _) = Parser(tokens).parseProgram()
         val expected = callStmt("foo", listOf(Expression(ExpressionType.Ident("bar"), 1, 3)), 1, 1)
 
         assertEquals(ast.size, 1)
@@ -860,7 +860,7 @@ class ParserTest {
             Token(TokenValue.Return, 1, 1),
             Token(TokenValue.Semicolon, 1, 2),
         )
-        val ast = Parser(tokens).parseProgram()
+        val (ast, _) = Parser(tokens).parseProgram()
         val expected = Statement(StatementType.Return(null), 1, 1)
 
         assertEquals(ast.size, 1)
@@ -875,7 +875,7 @@ class ParserTest {
             Token(TokenValue.NumberLiteral(42.0), 1, 2),
             Token(TokenValue.Semicolon, 1, 3),
         )
-        val ast = Parser(tokens).parseProgram()
+        val (ast, _) = Parser(tokens).parseProgram()
         val expected = Statement(
             StatementType.Return(
                 Expression(ExpressionType.NumberLiteral(42.0), 1, 2),

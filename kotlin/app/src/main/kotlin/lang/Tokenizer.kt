@@ -62,51 +62,79 @@ data class Token(
     val col: Int,
 )
 
-fun tokenizerRun(input: String): List<Token> {
-    val tokens = mutableListOf<Token>()
-
+class Tokenizer(val input: String) {
     var line = 1
     var col = 1
     var idx = 0
+    val tokens = mutableListOf<Token>()
+    var errors = mutableListOf<LangError>()
 
     fun peek(n: Int = 0): Char? {
         if (idx + n >= input.length) return null
         return input[idx + n]
     }
 
-    fun isNumeric(ch: Char): Boolean {
-        return '0' <= ch && ch <= '9'
-    }
+    fun error(err: LangError, until: Char = '\n') {
+        errors.add(err)
 
-    fun isAlpha(ch: Char): Boolean {
-        return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
-    }
-
-    fun doubleChar(next: Char, single: TokenValue, double: TokenValue) {
-        if (peek(1) == next) {
-            idx += 1
-            tokens.add(Token(double, line, col))
+        while (true) {
+            val next = peek()
+            if (next == null) {
+                return
+            }
+            if (next == until) {
+                line += 1
+                col = 1
+                return
+            }
             col += 1
-        } else {
-            tokens.add(Token(single, line, col))
+            idx += 1
         }
     }
 
-    while (idx < input.length) {
-        var ch = input[idx]
+    fun errorMessage(): String {
+        return buildString {
+            for ((i, err) in errors.withIndex()) {
+                if (i == errors.size - 1) {
+                    append(err.construct(input))
+                } else {
+                    appendLine(err.construct(input))
+                }
+            }
+        }
+    }
+
+    fun parseToken(ch: Char) {
+        fun isNumeric(ch: Char): Boolean {
+            return '0' <= ch && ch <= '9'
+        }
+
+        fun isAlpha(ch: Char): Boolean {
+            return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
+        }
+
+        fun doubleChar(next: Char, single: TokenValue, double: TokenValue) {
+            if (peek(1) == next) {
+                idx += 1
+                tokens.add(Token(double, line, col))
+                col += 1
+            } else {
+                tokens.add(Token(single, line, col))
+            }
+        }
 
         when (ch) {
             '\n' -> {
                 line += 1
                 col = 1
                 idx += 1
-                continue
+                return
             }
 
             ' ', '\t', '\r' -> {
                 col += 1
                 idx += 1
-                continue
+                return
             }
 
             // singlechar
@@ -130,7 +158,8 @@ fun tokenizerRun(input: String): List<Token> {
                     tokens.add(Token(TokenValue.DoubleAmp, line, col))
                     col += 1
                 } else {
-                    throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
+                    error(LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken))
+                    return
                 }
             }
 
@@ -140,7 +169,8 @@ fun tokenizerRun(input: String): List<Token> {
                     tokens.add(Token(TokenValue.DoublePipe, line, col))
                     col += 1
                 } else {
-                    throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
+                    error(LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken))
+                    return
                 }
             }
 
@@ -161,7 +191,7 @@ fun tokenizerRun(input: String): List<Token> {
                             else -> {}
                         }
                     }
-                    continue
+                    return
                 } else {
                     tokens.add(Token(TokenValue.Slash, line, col))
                 }
@@ -176,12 +206,12 @@ fun tokenizerRun(input: String): List<Token> {
 
                 while (true) {
                     val next = peek()
-                    check(next != null) {
-                        throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnterminatedString)
+                    if (next == null) {
+                        error(LangError(line, col, ErrorType.Syntax, ErrorMessage.UnterminatedString))
+                        return
                     }
-
                     if (next == '\n') {
-                        throw LangError(line, col, ErrorType.Syntax, ErrorMessage.StringContainsNewline)
+                        error(LangError(line, col, ErrorType.Syntax, ErrorMessage.StringContainsNewline))
                     }
                     if (next == '"') {
                         break
@@ -196,7 +226,7 @@ fun tokenizerRun(input: String): List<Token> {
                 col += 1
 
                 tokens.add(Token(TokenValue.StringLiteral(value), line, startCol))
-                continue
+                return
             }
 
             else -> {
@@ -217,9 +247,9 @@ fun tokenizerRun(input: String): List<Token> {
                         val value = valueStr.toDouble()
                         tokens.add(Token(TokenValue.NumberLiteral(value), line, startCol))
                     } catch (e: NumberFormatException) {
-                        throw LangError(line, startCol, ErrorType.Syntax, ErrorMessage.InvalidNumber)
+                        error(LangError(line, startCol, ErrorType.Syntax, ErrorMessage.InvalidNumber))
                     }
-                    continue
+                    return
                 }
 
                 if (isAlpha(ch)) {
@@ -257,11 +287,11 @@ fun tokenizerRun(input: String): List<Token> {
 
                         else -> tokens.add(Token(TokenValue.Ident(value), line, startCol))
                     }
-
-                    continue
+                    return
                 }
 
-                throw LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken)
+                error(LangError(line, col, ErrorType.Syntax, ErrorMessage.UnexpectedToken))
+                return
             }
         }
 
@@ -269,5 +299,11 @@ fun tokenizerRun(input: String): List<Token> {
         idx++
     }
 
-    return tokens
+    fun run(): List<Token> {
+        while (idx < input.length) {
+            var ch = input[idx]
+            parseToken(ch)
+        }
+        return tokens
+    }
 }
