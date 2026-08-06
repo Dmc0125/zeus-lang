@@ -14,7 +14,7 @@ I wanted to build a toy language since I've never built one and it seems fun.
 - [x] if
 - [x] for
 - [x] print
-- [ ] functions
+- [x] functions
 
 ## Grammar
 
@@ -27,6 +27,11 @@ statement := variableDeclaration ';'
            | block
            | if
            | for
+           | call ';'
+           | 'break' ';'
+           | 'continue' ';'
+           | 'return' expression? ';'
+
 
 variableDeclaration := ident ':=' expression
                      | ident ':' type
@@ -34,6 +39,7 @@ variableDeclaration := ident ':=' expression
 variableAssignment  := ident '=' expression
 print               := ('print'  | 'println') expression
 type                := 'number' | 'string' | 'bool'
+functionDeclaration := 'fun' ident '(' parameter* ')' (':' type)? block
 
 block               := '{' statement* '}'
 if                  := 'if' expression block ('else' if)* ('else' block)?
@@ -50,4 +56,7 @@ primary    := number
             | bool
             | ident
             | '(' expression ')'
+            | call
+
+call := ident '(' expression* ')'
 ```
