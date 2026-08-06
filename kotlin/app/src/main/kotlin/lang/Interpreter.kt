@@ -205,6 +205,7 @@ class Interpreter(
         func = func!!
 
         val funcVarEnv = Environment<VariableValue>()
+
         for ((i, callArg) in args.withIndex()) {
             val sigParam = func.params[i]
             val value = this.interpretExpression(callArg)

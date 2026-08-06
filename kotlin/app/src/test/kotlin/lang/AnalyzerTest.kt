@@ -271,4 +271,14 @@ class AnalyzerFunction : AnalyzerTest() {
             assertEquals(expected, e.errors[0])
         }
     }
+
+    @Test
+    fun `should handle recursion`() {
+        val program = """
+            fun foo(): number {
+                return foo();
+            }
+        """
+        runPipeline(program)
+    }
 }

@@ -176,4 +176,23 @@ class ProgramTest {
             throw e
         }
     }
+
+    @Test
+    fun `handles recursion`() {
+        val program = """
+            fun foo(x: number): number {
+                if x == 5 {
+                    return x;
+                }
+                print x;
+                return foo(x + 1);
+            }
+            x := foo(1);
+        """
+        val buf = ByteArrayOutputStream()
+        val output = PrintStream(buf, true, Charsets.UTF_8)
+        val interpreter = runPipeline(output, program)
+        assertEquals("1.02.03.04.0", buf.toString(Charsets.UTF_8))
+        assertEquals(VariableValue.Number(5.0), interpreter.varEnv.get("x"))
+    }
 }

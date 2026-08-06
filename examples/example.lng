@@ -10,7 +10,3 @@ for i := 0; i < 10; i += 1 {
         println x;
     }
 }
-
-str := "Hello,word;";
-str = 123;
-str = true;
