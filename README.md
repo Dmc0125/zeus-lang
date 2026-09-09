@@ -1,10 +1,10 @@
 # Zeus language
 
-I wanted to build a toy language since I've never built one and it seems fun. This is project is partly inspised by the book [Crafting Interpreters](https://craftinginterpreters.com/), which I read some time ago and although I did not use it as a reference, I figured it would be nice to mention it.
+I wanted to build a toy language since I've never built one and it seems fun. This is project is partly inspired by the book [Crafting Interpreters](https://craftinginterpreters.com/), which I read some time ago and although I did not use it as a reference, I figured it would be nice to mention it.
 
 ## Tree walk intepreter
 
-The kotlin part of the project is a tree walk interpreter for tha language. I never really used Kotlin so I figured this might be a good opportunity to try it. The tree walk interpreter is implemented in 4 steps:
+The kotlin part of the project is a tree walk interpreter for the language. I never really used Kotlin so I figured this might be a good opportunity to try it. The tree walk interpreter is implemented in 4 steps:
 
 1. Tokenizer - parse the input into tokens
 2. Parser - parse the tokens into an AST
@@ -74,6 +74,6 @@ println fib(30);
 
 ## VM in C
 
-The next step is to write a compiled and a VM for the language in C.
+The next step is to write a compiler and a VM for the language in C.
 
 The c implementation currently supports arithmetic expressions, so it's a small calculator.
