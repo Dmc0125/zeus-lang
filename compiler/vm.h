@@ -10,7 +10,6 @@ typedef enum {
   OpSub,
   OpMul,
   OpDiv,
-
   OpNeg,
 } OpCode;
 

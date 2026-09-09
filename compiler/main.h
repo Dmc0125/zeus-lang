@@ -113,7 +113,8 @@ typedef struct {
   size_t tokens_idx;
 
   Expressions *expr_arena;
-  Expr *last_expr;
+  Expr *last_expr; // TODO: since the expr arena can reallic, this can create a
+                   // dangling pointer
 } ParserState;
 
 void ParserState_init(ParserState *state, char *source, Tokens *tokens,

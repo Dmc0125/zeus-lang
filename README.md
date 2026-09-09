@@ -1,22 +1,19 @@
-# Toy language
+# Zeus language
 
-I wanted to build a toy language since I've never built one and it seems fun.
+I wanted to build a toy language since I've never built one and it seems fun. This is project is partly inspised by the book [Crafting Interpreters](https://craftinginterpreters.com/), which I read some time ago and although I did not use it as a reference, I figured it would be nice to mention it.
 
-## MVP
+## Tree walk intepreter
 
-- [x] numbers
-- [x] strings
-  - so far pretty much useless
-- [x] booleans
-- [x] variables
-  - declaration
-  - assignment
-- [x] if
-- [x] for
-- [x] print
-- [x] functions
+The kotlin part of the project is a tree walk interpreter for tha language. I never really used Kotlin so I figured this might be a good opportunity to try it. The tree walk interpreter is implemented in 4 steps:
 
-## Grammar
+1. Tokenizer - parse the input into tokens
+2. Parser - parse the tokens into an AST
+3. Analyzer - statically analyze the AST (type checking, etc.)
+4. Interpreter - execute the AST
+
+### Grammar
+
+The program consists of single file which is directly executed. It does not require main function as an entry point. It supports basic arithmetic, control flow, function calls and recursion. Supported types are `number`, `string`, `bool`, although string is mostly useless as no string operations are supported.
 
 ```
 program := statement*
@@ -60,3 +57,23 @@ primary    := number
 
 call := ident '(' expression* ')'
 ```
+
+### Example
+
+```
+// fibonacci
+fun fib(n: number): number {
+    if n < 2 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+println fib(30);
+```
+
+## VM in C
+
+The next step is to write a compiled and a VM for the language in C.
+
+The c implementation currently supports arithmetic expressions, so it's a small calculator.

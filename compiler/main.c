@@ -451,6 +451,8 @@ int main(int argc, char *argv[]) {
     VM vm;
     VM_init(&vm);
 
+    printf("Welcome to Zeus REPL!\n");
+
     while (1) {
       Tokens_clear(&tokens);
       Instructions_clear(&instructions);
@@ -485,8 +487,8 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
-      Expr_print(parser.last_expr);
-      printf("\n");
+      // Expr_print(parser.last_expr);
+      // printf("\n");
 
       error = VM_run(&vm, &instructions);
       if (error.type != ErrorNone) {
