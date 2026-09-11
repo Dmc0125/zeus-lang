@@ -72,6 +72,22 @@ fun fib(n: number): number {
 println fib(30);
 ```
 
+### Run
+
+1. compile the kotlin source from the ./kotlin directory
+
+```sh
+./gradlew build
+```
+
+2. run the compiled program
+
+- the path to the source code is optional, if ommited, REPL will be started
+
+```sh
+./app/build/install/app/bin/app <path_to_source_code>
+```
+
 ## VM in C
 
 The next step is to write a compiler and a VM for the language in C.
